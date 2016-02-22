@@ -15,9 +15,20 @@
  *
  * Copyright RBoy
  * Redistribution of any changes or code is not allowed without permission
- * Version 3.0.0
+ * Version 4.0.2
  *
  * Change Log:
+ * 2016-2-20 - Added slot notification for unknown users
+ * 2016-2-15 - Added current date/time stamp on hub for debugging timezone mismatches
+ * 2016-2-15 - Default coding interval is now 60 seconds as the platform is crapping out in shorter intervals
+ * 2016-2-15 - Revamped code initialization to work around crappy ST timers and make programming more reliable. Using dual programming strategy now to make it more redundant
+ * 2016-1-23 - Added user specific unlock actions (override actions)
+ * 2016-1-19 - Fixed a debug error message about empty slots sharing a null code
+ * 2016-1-19 - Added comments
+ * 2016-1-17 - You can specify multiple sms phone numbers by putting a + to separate them
+ * 2016-1-15 - Validation check, same code cannot be used for more than one user
+ * 2016-1-13 - Debug message
+ * 2016-1-10 - Added option to disable retrying code programming on failure
  * 2016-1-5 - Revamped code to verify with lock that codes have been successfully added and keep retrying until codes have been added
  * 2015-12-18 - Added subcription to random events to kick start timers to work around buggy platform, use runEveryXMinutes where possible to hopefully improve the situation
  * 2015-12-8 - Comment clarifications
@@ -86,7 +97,7 @@ def setupApp() {
     
     dynamicPage(name: "setupApp", title: "Lock User Management", install: false, uninstall: true, nextPage: "usersPage") {    
         section("Select Lock(s)") {
-            input "locks","capability.lock", title: "Lock", multiple: true,  submitOnChange: true
+            input "locks","capability.lock", title: "Lock", multiple: true, submitOnChange: true
         }
 
 		section("How many Users do you want to manage (common to all selected locks)?") {
@@ -94,7 +105,12 @@ def setupApp() {
         }
 
         section {
-            href(name: "unlockActions", title: "Click here to define actions when the user unlocks the door successfully", page: "unlockActionsPage", description: "", required: false)
+            // Unlock actions for all users (global)
+            def hrefParams = [
+                user: null, 
+                passed: true 
+            ]
+            href(name: "unlockActions", params: hrefParams, title: "Click here to define actions when the user unlocks the door successfully", page: "unlockActionsPage", description: "", required: false)
             href(name: "relockDoor", title: "Click here to automatically lock/unlock the door based on events", page: "relockDoorPage", description: "", required: false)
         }
 
@@ -102,9 +118,10 @@ def setupApp() {
 			label title: "Assign a name for this SmartApp", required: false
 		}
 
-		section("Code Programming Option (optional)") {
+		section("Code Programming Options (advanced) (optional)") {
             paragraph "Change this setting if all the user codes aren't being programmed on the lock correctly. This settings determines the time gap between sending each user code to the lock. If the codes are sent too fast, they may fail to be set properly."
-            input name: "sendDelay", title: "Delay between codes (seconds):", type: "number", defaultValue: "15", required: false
+            input name: "sendDelay", title: "Delay between codes (seconds):", type: "number", defaultValue: "60", required: false
+            input name: "disableRetry", title: "Don't retry code reprogramming on failure", type: "bool", required: false
         }
     }
 }
@@ -139,51 +156,71 @@ def relockDoorPage() {
     }
 }
 
-def unlockActionsPage() {
-    dynamicPage(name:"unlockActionsPage", title: "Setup unlock actions for each door", uninstall: false, install: false) {
+def unlockActionsPage(params) {
+	//  params is broken, after doing a submitOnChange on this page, params is lost. So as a work around when this page is called with params save it to state and if the page is called with no params we know it's the bug and use the last state instead
+    if (params.passed) {
+        atomicState.params = params // We got something, so save it otherwise it's a page refresh for submitOnChange
+    }
+
+    def user = atomicState.params?.user ?: ""
+	def name = user ? settings."userNames${user}" : ""
+    
+    log.trace "Unlock Action Page, user:$user, name:$name, params:$atomicState.params"
+
+    dynamicPage(name:"unlockActionsPage", title: "Setup unlock actions for each door" + (user ? " for user $name." : ""), uninstall: false, install: false) {
         def phrases = location.helloHome?.getPhrases()*.label
+        def showActions = true
         if (phrases) {
             phrases.sort()
             section {
-                if  (locks?.size() > 1) {
-                    input name: "individualDoorActions", title: "Separate unlock actions for each door", type: "bool", required: true,  submitOnChange: true
-                }
-            }
-            if (individualDoorActions) {
-                for (lock in locks) {
-                    section ("Door Unlock Actions for $lock (optional)") {
-                        def priorHomePhrase = settings."homePhrase${lock}"
-                        def priorHomeMode = settings."homeMode${lock}"
-                        def priorHomeDisarm = settings."homeDisarm${lock}"
-
-                        paragraph "Run these routines and/or change the mode when a user successfully unlocks the door $lock"
-                        input name: "homePhrase${lock}", type: "enum", title: "Run Routine", required: false, options: phrases, defaultValue: priorHomePhrase
-                        input name: "homeMode${lock}", type: "mode", title: "Change Mode To", required: false, multiple: false, defaultValue: priorHomeMode
-                        input name: "homeDisarm${lock}", type: "bool", title: "Disarm Smart Home Monitor", required: false, defaultValue: priorHomeDisarm
-
-                        paragraph "Turn on these lights after dark when a user successfully unlocks the door $lock"
-                        input "turnOnSwitchesAfterSunset${lock}", "capability.switch", title: "Turn on light(s) after dark", required: false, multiple: true
-
-                        paragraph "Turn on and/or off these switches/lights when a user successfully unlocks the door $lock"
-                        input "turnOnSwitches${lock}", "capability.switch", title: "Turn on switch(s)", required: false, multiple: true
-                        input "turnOffSwitches${lock}", "capability.switch", title: "Turn off switch(s)", required: false, multiple: true
+            	if (user) { // User specific override options
+                	paragraph "Enabling user specific unlock actions will override over any general unlock actions defined on the first page"
+                    input "userOverrideUnlockActions${user}", "bool", title: "Define specific unlock actions for $name", required: true,  submitOnChange: true
+                    if (!settings."userOverrideUnlockActions${user}") { // Check if user has enabled specific override actions then show menu
+                    	showActions = false
                     }
                 }
-            } else {
-                section("Door Unlock Actions (optional)") {
-                    paragraph "Run these routines and/or change the mode when a user successfully unlocks the door"
-                    input name: "homePhrase", type: "enum", title: "Run Routine", required: false, options: phrases
-                    input name: "homeMode", type: "mode", title: "Change Mode To", required: false, multiple: false
-                    input name: "homeDisarm", type: "bool", title: "Disarm Smart Home Monitor", required: false
-
-                    paragraph "Turn on these lights after dark when a user successfully unlocks the door"
-                    input name: "turnOnSwitchesAfterSunset", type: "capability.switch", title: "Turn on light(s) after dark", required: false, multiple: true
-
-                    paragraph "Turn on and/or off these switches/lights when a user successfully unlocks the door"
-                    input name: "turnOnSwitches", type: "capability.switch", title: "Turn on switch(s)", required: false, multiple: true
-                    input name: "turnOffSwitches", type: "capability.switch", title: "Turn off switch(s)", required: false, multiple: true
+                if  (showActions && locks?.size() > 1) {
+                    input "individualDoorActions${user}", "bool", title: "Separate unlock actions for each door", required: true,  submitOnChange: true
                 }
-            }        
+            }
+            if (showActions) { // Do we need to show actions?
+                if (settings."individualDoorActions${user}") {
+                    for (lock in locks) {
+                        section ("Door Unlock Actions for $lock (optional)") {
+                            def priorHomePhrase = settings."homePhrase${lock}${user}"
+                            def priorHomeMode = settings."homeMode${lock}${user}"
+                            def priorHomeDisarm = settings."homeDisarm${lock}${user}"
+
+                            paragraph "Run these routines and/or change the mode when a user successfully unlocks the door $lock"
+                            input "homePhrase${lock}${user}", "enum", title: "Run Routine", required: false, options: phrases, defaultValue: priorHomePhrase
+                            input "homeMode${lock}${user}", "mode", title: "Change Mode To", required: false, multiple: false, defaultValue: priorHomeMode
+                            input "homeDisarm${lock}${user}", "bool", title: "Disarm Smart Home Monitor", required: false, defaultValue: priorHomeDisarm
+
+                            paragraph "Turn on these lights after dark when a user successfully unlocks the door $lock"
+                            input "turnOnSwitchesAfterSunset${lock}${user}", "capability.switch", title: "Turn on light(s) after dark", required: false, multiple: true
+
+                            paragraph "Turn on and/or off these switches/lights when a user successfully unlocks the door $lock"
+                            input "turnOnSwitches${lock}${user}", "capability.switch", title: "Turn on switch(s)", required: false, multiple: true
+                            input "turnOffSwitches${lock}${user}", "capability.switch", title: "Turn off switch(s)", required: false, multiple: true
+                        }
+                    }
+                } else {
+                    section("Door Unlock Actions (optional)") {
+                        paragraph "Run these routines and/or change the mode when a user successfully unlocks the door"
+                        input "homePhrase${user}", "enum", title: "Run Routine", required: false, options: phrases
+                        input "homeMode${user}", "mode", title: "Change Mode To", required: false, multiple: false
+                        input "homeDisarm${user}", "bool", title: "Disarm Smart Home Monitor", required: false
+
+                        paragraph "Turn on these lights after dark when a user successfully unlocks the door"
+                        input "turnOnSwitchesAfterSunset${user}", "capability.switch", title: "Turn on light(s) after dark", required: false, multiple: true
+
+                        paragraph "Turn on and/or off these switches/lights when a user successfully unlocks the door"
+                        input "turnOnSwitches${user}", "capability.switch", title: "Turn on switch(s)", required: false, multiple: true
+                        input "turnOffSwitches${user}", "capability.switch", title: "Turn off switch(s)", required: false, multiple: true
+                    }
+                }
+            }
         }
     }
 }
@@ -192,6 +229,7 @@ def usersPage() {
 	dynamicPage(name:"usersPage", title: "User Names, Codes and Notification Setup", uninstall: true, install: true) {
 
 	section("Notification Options") {
+    	paragraph "You can enter multiple phone numbers to send an SMS to by separating them with a '+'. E.g. 5551234567+4447654321"
         input name: "sms", title: "Send SMS notification to (optional):", type: "phone", required: false
         paragraph "Enable the below option if you DON'T want push notifications on your SmartThings phone app. This does not impact the SMS notifications."
         input name: "disableAllNotify", title: "Disable all push notifications", type: "bool", defaultValue: "false", required: true
@@ -229,6 +267,15 @@ def usersPage() {
 
 			// Check for errors and display messages
             section("User Management Slot #${i}") {
+            	// Sanity check, codes cannot be reused in the same lock (codes have to be unique to the same slot
+                for (int j = 1; j <= settings.maxUserNames; j++) {
+                	if (priortCode && (i != j) && (priorCode == settings."userCodes${j}")) {
+                        log.warn "CHANGE CODE FOR USER $i - THIS CODE HAS BEEN USED FOR USER $j"
+                        paragraph "CHANGE CODE - THIS CODE HAS BEEN USED FOR USER $j"
+                    }
+                }
+            
+            	// Sanity check for expiration date formats
                 switch (priorUserType) {
                 	case 'Expire on':
                     	def invalidDate = true
@@ -298,10 +345,11 @@ def usersPage() {
                     	break
                 }
 
+                // User and code details/types
 				if (priorCode) {
                     input name: "userNames${i}", description: "${priorName}", title: "Name", defaultValue: priorName, type: "text", multiple: false, required: false
-                    input name: "userCodes${i}", description: "${priorCode}", title: "Code", defaultValue: priorCode, type: "text", multiple: false, required: false
-                    input name: "userNotify${i}", title: "Notify", defaultValue: priorNotify, type: "bool"
+                    input name: "userCodes${i}", description: "${priorCode}", title: "Code", defaultValue: priorCode, type: "text", multiple: false, required: false, submitOnChange: true
+                    input name: "userNotify${i}", title: "Notify on unlock", defaultValue: priorNotify, type: "bool"
                     input name: "userType${i}",
                         type: "enum",
                         title: "Select User Type",
@@ -324,6 +372,7 @@ def usersPage() {
                         submitOnChange: true
                 }
                 
+                // Expiration/Scheduling options
                 switch (priorUserType) {
                 	case 'Expire on':
                         if (priorStartDate) { // Start Date/Time is optional
@@ -377,6 +426,13 @@ def usersPage() {
                     default:
 	                    break
                 }
+                
+                // Unlock actions for each user
+                def hrefParams = [
+                    user: i as String, 
+                    passed: true 
+                ]
+                href(name: "unlockActions", params: hrefParams, title: "Click here to define unlock actions for ${settings."userNames${i}"}", page: "unlockActionsPage", description: "", required: false)
             }
         } 
 	} 
@@ -410,6 +466,23 @@ def appTouch() {
 	unschedule() // clear all pending updates
     unsubscribe()
     
+    // Sanity check for codes
+    for (int i = 1; i <= settings.maxUserNames; i++) {
+        def name1 = settings."userNames${i}"
+        def code1 = settings."userCodes${i}"
+        for (int j = 1; j <= settings.maxUserNames; j++) {
+            def name2 = settings."userNames${j}"
+            def code2 = settings."userCodes${j}"
+            if (code1 && (i != j) && (code1 == code2)) { // Don't print error on null codes
+                log.error "CODE CONFLICT LOCK PROGRAMMING MAY FAIL - USER $name1 IN SLOT $i and USER $name2 IN SLOT $j SHARE THE SAME CODE $code1.\r\nMULTIPLE USERS CANNOT HAVE THE SAME CODE!!"
+                sendPush("CODE CONFLICT LOCK PROGRAMMING MAY FAIL - USER $name1 IN SLOT $i and USER $name2 IN SLOT $j SHARE THE SAME CODE $code1.\r\nMULTIPLE USERS CANNOT HAVE THE SAME CODE!!")
+                if (sms) {
+                    sendText(sms, "CODE CONFLICT LOCK PROGRAMMING MAY FAIL - USER $name1 IN SLOT $i and USER $name2 IN SLOT $j SHARE THE SAME CODE $code.\r\nMULTIPLE USERS CANNOT HAVE THE SAME CODE!!")
+                }
+            }
+        }
+    }
+
     // subscribe to random events to kick start timers again due to buggy platform killing the timers after a while
     subscribe(location, "mode", changeHandler)
     subscribe(location, "position", changeHandler)
@@ -452,9 +525,9 @@ def appTouch() {
     state.updateNextCode = 1 // set next code to be set for the update loop
     state.expiredNextCode = 1 // set next code to be set for the expired loop
     
-    startTimer(1, initializeCodes) // Initialize codes
+    log.debug "Initialization complete, starting code updates starting with code $state.updateNextCode"
     
-    log.debug "Initialization complete, scheduling code updates starting with code $state.updateNextCode in 1 second"
+    initializeCodes() // Initialize codes
 }
 
 // Handle changes, reinitialize the code check timers after a change, this is to workaround the issue of a buggy ST platform where the timers die randomly for some users
@@ -569,7 +642,7 @@ def codeResponse(evt) {
     def code = evt.data ? new JsonSlurper().parseText(evt.data)?.code : "" // Not all locks return a code due to a bug in the base Z-Wave lock device code
     def desc = evt.descriptionText // Description can have "is set" or "was added" or "changed" when code was added successfully
     def name = settings."userNames${user}"
-	log.trace "Code report returned Name:${name}, User:${user}, Code:${code}, Desc:${desc}"
+	log.trace "Code report $evt.name returned Name:${name}, User:${user}, Code:${code}, Desc:${desc}"
     if ((!state.programmedCodes[lock.id].contains(user as String)) && (["is set", "was added", "changed"].any { desc.contains(it) })) {
         state.programmedCodes[lock.id].add(user as String)
         log.info "Confirmed $lock added $name to user $user"
@@ -607,101 +680,107 @@ def lockHandler(evt) {
                         sendNotificationEvent("$evt.displayName was unlocked manually")
                     }
                     if (sms) {
-                        sendSms(sms, "$evt.displayName was unlocked manually")
+                        sendText(sms, "$evt.displayName was unlocked manually")
                     }
                 }
-            }
-            else {
+            } else {
             	Integer i = data.usedCode as Integer
                 def userName = settings."userNames${i}"
                 def notify = settings."userNotify${i}"
                 
                 log.debug "Lock $evt.displayName unlocked by $userName, notify $notify"
                 
+                // Check if we have user override unlock actions defined
+                def user = ""
+                if (settings."userOverrideUnlockActions${i as String}") {
+                	log.debug "Found per user unlock actions"
+                    user = i as String
+                }
+                
                 // First disarm SHM since it goes off due to other events
-                if (individualDoorActions) {
-                    if (settings."homeDisarm${lock}") {
+                if (settings."individualDoorActions${user}") {
+                    if (settings."homeDisarm${lock}${user}") {
                         log.info "Disarming Smart Home Monitor"
                         sendLocationEvent(name: "alarmSystemStatus", value: "off") // First do this to avoid false alerts from a slow platform
                         sendNotificationEvent("$evt.displayName was unlocked successfully,  disarming Smart Home Monitor")
                     }
 
-                    if (settings."homeMode${lock}") {
-                        log.info "Changing mode to ${settings."homeMode${lock}"}"
-                        if (location.modes?.find{it.name == settings."homeMode${lock}"}) {
-                            setLocationMode(settings."homeMode${lock}") // First do this to avoid false alerts from a slow platform
+                    if (settings."homeMode${lock}${user}") {
+                        log.info "Changing mode to ${settings."homeMode${lock}${user}"}"
+                        if (location.modes?.find{it.name == settings."homeMode${lock}${user}"}) {
+                            setLocationMode(settings."homeMode${lock}${user}") // First do this to avoid false alerts from a slow platform
                         }  else {
-                            log.warn "Tried to change to undefined mode '${settings."homeMode${lock}"}'"
+                            log.warn "Tried to change to undefined mode '${settings."homeMode${lock}${user}"}'"
                         }
-                        sendNotificationEvent("$evt.displayName was unlocked successfully, changing mode to ${settings."homeMode${lock}"}")
+                        sendNotificationEvent("$evt.displayName was unlocked successfully, changing mode to ${settings."homeMode${lock}${user}"}")
                     }
 
-                    if (settings."homePhrase${lock}") {
-                        log.info "Running unlock Phrase ${settings."homePhrase${lock}"}"
-                        location.helloHome.execute(settings."homePhrase${lock}") // First do this to avoid false alerts from a slow platform
-                        sendNotificationEvent("$evt.displayName was unlocked successfully, running ${settings."homePhrase${lock}"}")
+                    if (settings."homePhrase${lock}${user}") {
+                        log.info "Running unlock Phrase ${settings."homePhrase${lock}${user}"}"
+                        location.helloHome.execute(settings."homePhrase${lock}${user}") // First do this to avoid false alerts from a slow platform
+                        sendNotificationEvent("$evt.displayName was unlocked successfully, running ${settings."homePhrase${lock}${user}"}")
                     }
 
-                    if (settings."turnOnSwitchesAfterSunset${lock}") {
+                    if (settings."turnOnSwitchesAfterSunset${lock}${user}") {
                         def cdt = new Date(now())
                         def sunsetSunrise = getSunriseAndSunset(sunsetOffset: "-00:30") // Turn on 30 minutes before sunset (dark)
                         log.trace "Current DT: $cdt, Sunset $sunsetSunrise.sunset, Sunrise $sunsetSunrise.sunrise"
                         if ((cdt >= sunsetSunrise.sunset) || (cdt <= sunsetSunrise.sunrise)) {
-                            log.info "$evt.displayName was unlocked successfully, turning on lights ${settings."turnOnSwitchesAfterSunset${lock}"} since it's after sunset but before sunrise"
-                            settings."turnOnSwitchesAfterSunset${lock}"?.on()
+                            log.info "$evt.displayName was unlocked successfully, turning on lights ${settings."turnOnSwitchesAfterSunset${lock}${user}"} since it's after sunset but before sunrise"
+                            settings."turnOnSwitchesAfterSunset${lock}${user}"?.on()
                         }
                     }
 
-                    if (settings."turnOnSwitches${lock}") {
-                        log.info "$evt.displayName was unlocked successfully, turning on switches ${settings."turnOnSwitches${lock}"}"
-                        settings."turnOnSwitches${lock}"?.on()
+                    if (settings."turnOnSwitches${lock}${user}") {
+                        log.info "$evt.displayName was unlocked successfully, turning on switches ${settings."turnOnSwitches${lock}${user}"}"
+                        settings."turnOnSwitches${lock}${user}"?.on()
                     }
 
-                    if (settings."turnOffSwitches${lock}") {
-                        log.info "$evt.displayName was unlocked successfully, turning off switches ${settings."turnOffSwitches${lock}"}"
-                        settings."turnOffSwitches${lock}"?.off()
+                    if (settings."turnOffSwitches${lock}${user}") {
+                        log.info "$evt.displayName was unlocked successfully, turning off switches ${settings."turnOffSwitches${lock}${user}"}"
+                        settings."turnOffSwitches${lock}${user}"?.off()
                     }
                 } else {
-                    if (homeDisarm) {
+                    if (settings."homeDisarm${user}") {
                         log.info "Disarming Smart Home Monitor"
                         sendLocationEvent(name: "alarmSystemStatus", value: "off") // First do this to avoid false alerts from a slow platform
                         sendNotificationEvent("$evt.displayName was unlocked successfully,  disarming Smart Home Monitor")
                     }
 
-                    if (homeMode) {
-                        log.info "Changing mode to ${settings.homeMode}"
-                        if (location.modes?.find{it.name == homeMode}) {
-                            setLocationMode(homeMode) // First do this to avoid false alerts from a slow platform
+                    if (settings."homeMode${user}") {
+                        log.info "Changing mode to ${settings."homeMode${user}"}"
+                        if (location.modes?.find{it.name == settings."homeMode${user}"}) {
+                            setLocationMode(settings."homeMode${user}") // First do this to avoid false alerts from a slow platform
                         }  else {
-                            log.warn "Tried to change to undefined mode '${homeMode}'"
+                            log.warn "Tried to change to undefined mode '${settings."homeMode${user}"}'"
                         }
-                        sendNotificationEvent("$evt.displayName was unlocked successfully, changing mode to ${settings.homeMode}")
+                        sendNotificationEvent("$evt.displayName was unlocked successfully, changing mode to ${settings."homeMode${user}"}")
                     }
 
-                    if (homePhrase) {
-                        log.info "Running unlock Phrase ${settings.homePhrase}"
-                        location.helloHome.execute(settings.homePhrase) // First do this to avoid false alerts from a slow platform
-                        sendNotificationEvent("$evt.displayName was unlocked successfully, running ${settings.homePhrase}")
+                    if (settings."homePhrase${user}") {
+                        log.info "Running unlock Phrase ${settings."homePhrase${user}"}"
+                        location.helloHome.execute(settings."homePhrase${user}") // First do this to avoid false alerts from a slow platform
+                        sendNotificationEvent("$evt.displayName was unlocked successfully, running ${settings."homePhrase${user}"}")
                     }
 
-                    if (turnOnSwitchesAfterSunset) {
+                    if (settings."turnOnSwitchesAfterSunset${user}") {
                         def cdt = new Date(now())
                         def sunsetSunrise = getSunriseAndSunset(sunsetOffset: "-00:30") // Turn on 30 minutes before sunset (dark)
                         log.trace "Current DT: $cdt, Sunset $sunsetSunrise.sunset, Sunrise $sunsetSunrise.sunrise"
                         if ((cdt >= sunsetSunrise.sunset) || (cdt <= sunsetSunrise.sunrise)) {
-                            log.info "$evt.displayName was unlocked successfully, turning on lights $turnOnSwitchesAfterSunset since it's after sunset but before sunrise"
-                            turnOnSwitchesAfterSunset?.on()
+                            log.info "$evt.displayName was unlocked successfully, turning on lights ${settings."turnOnSwitchesAfterSunset${user}"} since it's after sunset but before sunrise"
+                            settings."turnOnSwitchesAfterSunset${user}"?.on()
                         }
                     }
 
-                    if (turnOnSwitches) {
-                        log.info "$evt.displayName was unlocked successfully, turning on switches $turnOnSwitches"
-                        turnOnSwitches?.on()
+                    if (settings."turnOnSwitches${user}") {
+                        log.info "$evt.displayName was unlocked successfully, turning on switches ${settings."turnOnSwitches${user}"}"
+                        settings."turnOnSwitches${user}"?.on()
                     }
 
-                    if (turnOffSwitches) {
-                        log.info "$evt.displayName was unlocked successfully, turning off switches $turnOffSwitches"
-                        turnOffSwitches?.off()
+                    if (settings."turnOffSwitches${user}") {
+                        log.info "$evt.displayName was unlocked successfully, turning off switches ${settings."turnOffSwitches${user}"}"
+                        settings."turnOffSwitches${user}"?.off()
                     }
                 }
                                 
@@ -712,12 +791,12 @@ def lockHandler(evt) {
                 if (notify) {
                     if (userName == null) {
                     	if (!disableAllNotify) {
-                        	sendPush "$evt.displayName was unlocked by Unknown User"
+                        	sendPush "$evt.displayName was unlocked by Unknown User from slot $i"
                         } else {
-                            sendNotificationEvent("$evt.displayName was unlocked by Unknown User")
+                            sendNotificationEvent("$evt.displayName was unlocked by Unknown User from slot $i")
                         }
                         if (sms) {
-                        	sendSms(sms, "$evt.displayName was unlocked by Unknown User")
+                        	sendText(sms, "$evt.displayName was unlocked by Unknown User from slot $i")
                         }
                     }
                     else {
@@ -727,7 +806,7 @@ def lockHandler(evt) {
                             sendNotificationEvent("$evt.displayName was unlocked by $userName")
                         }
                         if (sms) {
-                        	sendSms(sms, "$evt.displayName was unlocked by $userName")
+                        	sendText(sms, "$evt.displayName was unlocked by $userName")
                         }
                     }
                 }
@@ -762,7 +841,7 @@ def lockHandler(evt) {
                     sendNotificationEvent("$evt.displayName was locked $lockMode")
                 }
                 if (sms) {
-                    sendSms(sms, "$evt.displayName was locked $lockMode")
+                    sendText(sms, "$evt.displayName was locked $lockMode")
                 }
             }
         }
@@ -775,7 +854,7 @@ def lockHandler(evt) {
                     sendNotificationEvent("$evt.displayName lock is Jammed!")
                 }
                 if (sms) {
-                    sendSms(sms, "$evt.displayName lock is Jammed!")
+                    sendText(sms, "$evt.displayName lock is Jammed!")
                 }
             }        	
         }
@@ -789,17 +868,20 @@ def lockHandler(evt) {
                 sendNotificationEvent("Too many invalid user codes detected on lock $evt.displayName")
             }
             if (sms) {
-                sendSms(sms, "Too many invalid user codes detected on lock $evt.displayName")
+                sendText(sms, "Too many invalid user codes detected on lock $evt.displayName")
             }
         }        	
     }
 }
                 
 def initializeCodes() {
-	for (lock in locks) {
+    log.trace "The date/time on the hub now is ${(new Date(now())).format("EEE MMM dd yyyy HH:mm z", location.timeZone)}"
+    
+    for (lock in locks) {
 		if (state.updateLockList.contains(lock.id)) { // this lock codes hasn't been completely initiated
-        	log.trace "Check for pending code updates for $lock"
-	        if (state.updateNextCode <= settings.maxUserNames) {
+            def userCodes = [] // Build the list and program them together at once using updateCodes to work around the crappy platform timers issue
+        	log.trace "Initializing pending codes for $lock"
+	        while (state.updateNextCode <= settings.maxUserNames) {
             	log.trace "Updating code $state.updateNextCode on $lock"
                 def i = state.updateNextCode // Next code we are checking
                 def name = settings."userNames${i}" // Get the name for the slot
@@ -834,7 +916,7 @@ def initializeCodes() {
                                         def start = startD.getTimeInMillis() + startT
                                         def startStr = (new Date(start.value)).format("EEE MMM dd yyyy HH:mm z", location.timeZone)
                                         if (start <= now()) {
-                                            if (!state.programmedCodes[lock.id].contains(i as String)) {
+                                            if (!state.programmedCodes[lock.id].contains(user as String)) {
                                                 sendNotificationEvent("$lock user $user $name's code is set to start on $startStr")
                                                 log.debug "$lock user $user $name's code is set to start on $startStr"
                                                 doAdd = true // we need to add the code
@@ -842,7 +924,7 @@ def initializeCodes() {
                                                 log.error "$lock User $user $name is already tracked as start added"
                                             }
                                         } else {
-                                            if (!state.programmedCodes[lock.id].contains(i as String)) {
+                                            if (!state.programmedCodes[lock.id].contains(user as String)) {
                                                 sendNotificationEvent("$lock user $user $name's code is set to start in future on $startStr")
                                                 log.debug "$lock user $user $name's code is set to start in future on $startStr"
                                             } else {
@@ -911,43 +993,55 @@ def initializeCodes() {
                 }
 
                 if ((code != null) && doAdd) { // We have a code and it is not expired/within schedule, update or set the code in the slot
-                    lock.setCode(user, code)
+                    userCodes << ["code${user}", code]
                     log.debug "Requesting $lock to add $name to user $user, code: $code"
                     sendNotificationEvent("Requesting $lock to add $name to user $user")
+                    if (disableRetry && !state.programmedCodes[lock.id].contains(user as String)) {
+                        log.info "Retry programming disabled, assuming user was added successfully to the lock"
+                        state.programmedCodes[lock.id].add(user as String)
+                    }
                 } else { // Delete the slot
-                    lock.deleteCode(user)
+                    userCodes << ["code${user}", ""]
                     log.info "Requesting $lock to delete user $user $name"
                     sendNotificationEvent("Requesting $lock to delete user $user $name")
 
-                    if (state.programmedCodes[lock.id].contains(i as String)) { // At this stage there should be no codes in the programmed list
+                    if (state.programmedCodes[lock.id].contains(user as String)) { // At this stage there should be no codes in the programmed list
                         log.error "Initialization ERROR: $name user $user exists in $lock list of confirmed programmed codes"
-                        state.programmedCodes[lock.id].remove(i as String)
+                        state.programmedCodes[lock.id].remove(user as String)
                     }
                 }
                 
 				state.updateNextCode = state.updateNextCode + 1 // move onto the next code
-				//log.trace "Scheduled next code update in ${sendDelay > 0 ? sendDelay : 15} seconds"
-                startTimer((sendDelay > 0 ? sendDelay : 15), initializeCodes) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
-                return // We are done here, exit out as we've scheduled the next update
             }
             
             state.updateLockList.remove(lock.id) // we are done with this lock
             state.updateNextCode = 1 // reset back to 1 for the next lock
             log.trace "$lock id $lock.id code updates complete, unprocessed locks ${state.updateLockList}, reset next code update to $state.updateNextCode"
+            
+            // Now that we have built the list of codes to be added and removed, program them all together by offloading to device to avoid the crappy platform timer dying issues
+            log.debug "Sending codes $userCodes to the $lock for programming"
+            lock.updateCodes(userCodes)
+
+            log.trace "Scheduled next lock code initialization in ${settings.maxUserNames > 0 ? settings.maxUserNames * 15 : 15} seconds"
+            startTimer((settings.maxUserNames > 0 ? settings.maxUserNames * 15 : 15), initializeCodes) // It takes the lock about 15 seconds to program each code and get a response (give lock time to finish up programming actions)
+            return
         }
     }
     
-    startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // start the code check routine in a few seconds (give lock time to finish up current pending actions)
+    log.trace "Scheduled code programming verfication in ${settings.maxUserNames > 0 ? settings.maxUserNames * 15 : 15} seconds"
+    startTimer((settings.maxUserNames > 0 ? settings.maxUserNames * 15 : 15), codeCheck) // It takes the lock about 15 seconds to program each code and get a response (give lock time to finish up programming actions)
 }
 
 def codeCheck() {
     log.trace "CodeCheck called"
+    
+    log.trace "The date/time on the hub now is ${(new Date(now())).format("EEE MMM dd yyyy HH:mm z", location.timeZone)}"
 
     for (lock in locks) {
         if (state.expiredLockList.contains(lock.id)) { // this lock codes hasn't been completely initiated
-            log.trace "Check for code updates for $lock"
+            log.trace "Verifying internal status for codes on $lock"
             while (state.expiredNextCode <= settings.maxUserNames) { // cycle through all the codes
-                log.trace "Checking updates for code $state.expiredNextCode on $lock"
+                log.trace "Verifying internal status for code $state.expiredNextCode on $lock"
                 def i = state.expiredNextCode
                 def name = settings."userNames${i}" // Get the name for the slot
                 def code = settings."userCodes${i}" // Get the code for the slot
@@ -977,10 +1071,14 @@ def codeCheck() {
                                 def exp = expD.getTimeInMillis() + expT
                                 def expStr = (new Date(exp.value)).format("EEE MMM dd yyyy HH:mm z", location.timeZone)
                                 if ((start <= now()) && (exp > now())) {
-                                    if (!state.programmedCodes[lock.id].contains(i as String)) {
+                                    if (!state.programmedCodes[lock.id].contains(user as String)) {
                                         lock.setCode(user, code)
                                         log.debug "Requesting $lock to add $name to user $user, code: $code, because it is scheduled to start at $startStr"
                                         sendNotificationEvent("Requesting $lock to add $name to user $user, because it is scheduled to start at $startStr")
+                                        if (disableRetry) {
+                                            log.info "Retry programming disabled, assuming user was added successfully to the lock"
+                                            state.programmedCodes[lock.id].add(user as String)
+                                        }
 
                                         state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                         //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1002,15 +1100,15 @@ def codeCheck() {
                                 def exp = expD.getTimeInMillis() + expT
                                 def expStr = (new Date(exp.value)).format("EEE MMM dd yyyy HH:mm z", location.timeZone)
                                 if (exp < now()) {
-                                    if (!state.expiredCodes[lock.id].contains(i as String)) {
-                                        state.expiredCodes[lock.id].add(i as String)
+                                    if (!state.expiredCodes[lock.id].contains(user as String)) {
+                                        state.expiredCodes[lock.id].add(user as String)
                                         lock.deleteCode(user)
                                         log.info "Requesting $lock to delete expired user $user $name"
                                         sendNotificationEvent("Requesting $lock to delete expired user $user $name")
                                         
-                                        if (state.programmedCodes[lock.id].contains(i as String)) {
+                                        if (state.programmedCodes[lock.id].contains(user as String)) {
                                         	log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                                        	state.programmedCodes[lock.id].remove(i as String)
+                                        	state.programmedCodes[lock.id].remove(user as String)
                                         } else {
                                         	log.warn "$lock list of confirmed programmed codes does not contain $name user $user"
                                         }
@@ -1031,16 +1129,16 @@ def codeCheck() {
 
                     case 'One time':
                     	if (code != null) {
-                            if (state.usedOneTimeCodes[lock.id].contains(i as String)) {
-                                state.usedOneTimeCodes[lock.id].remove(i as String)
-                                state.trackUsedOneTimeCodes.add(i as String) // track it for reporting purposes
+                            if (state.usedOneTimeCodes[lock.id].contains(user as String)) {
+                                state.usedOneTimeCodes[lock.id].remove(user as String)
+                                state.trackUsedOneTimeCodes.add(user as String) // track it for reporting purposes
                                 lock.deleteCode(user)
                                 log.info "Requesting $lock to delete one time user $user $name"
                                 sendNotificationEvent("Requesting $lock to delete one time user $user $name")
 
-                                if (state.programmedCodes[lock.id].contains(i as String)) {
+                                if (state.programmedCodes[lock.id].contains(user as String)) {
                                     log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                                    state.programmedCodes[lock.id].remove(i as String)
+                                    state.programmedCodes[lock.id].remove(user as String)
                                 } else {
                                     log.warn "$lock list of confirmed programmed codes does not contain $name user $user"
                                 }
@@ -1050,10 +1148,14 @@ def codeCheck() {
                                 startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
                                 return // We are done here, exit out as we've scheduled the next update
                             } else {
-                                if (!state.programmedCodes[lock.id].contains(i as String)) {
+                                if (!state.programmedCodes[lock.id].contains(user as String)) {
                                     lock.setCode(user, code)
                                     log.debug "Requesting $lock to add one time code $name to user $user, code: $code"
                                     sendNotificationEvent("Requesting $lock to add one time code $name to user $user")
+                                    if (disableRetry) {
+                                        log.info "Retry programming disabled, assuming user was added successfully to the lock"
+                                        state.programmedCodes[lock.id].add(user as String)
+                                    }
 
                                     state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                     //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1069,12 +1171,16 @@ def codeCheck() {
                     case 'Scheduled':
                     	if (code != null) {
                             if (checkSchedule(i, "A")) { // Within operating schedule
-                                if (state.programmedCodes[lock.id].contains(i as String)) {
+                                if (state.programmedCodes[lock.id].contains(user as String)) {
                                     log.debug "$lock Scheduled user $user $name is already active, not adding again"
                                 } else {
                                     lock.setCode(user, code)
                                     log.debug "Requesting $lock to add $name to user $user, code: $code, because it is scheduled to work between $userDayOfWeekA: $userStartTimeA to $userEndTimeA"
                                     sendNotificationEvent("Requesting $lock to add $name to user $user because it is scheduled to work between $userDayOfWeekA: $userStartTimeA to $userEndTimeA")
+                                    if (disableRetry) {
+                                    	log.info "Retry programming disabled, assuming user was added successfully to the lock"
+                                        state.programmedCodes[lock.id].add(user as String)
+                                    }
 
                                     state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                     //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1082,7 +1188,7 @@ def codeCheck() {
                                     return // We are done here, exit out as we've scheduled the next update
                                 }
                             } else { // Outside operating schedule
-                                if (!state.programmedCodes[lock.id].contains(i as String)) {
+                                if (!state.programmedCodes[lock.id].contains(user as String)) {
                                     log.debug "$lock Scheduled user $user $name is already inactive, not removing again"
                                 } else {
                                     lock.deleteCode(user)
@@ -1090,7 +1196,7 @@ def codeCheck() {
                                     sendNotificationEvent("Requesting $lock to delete expired user $user $name because it is scheduled to work between $userDayOfWeekA: $userStartTimeA to $userEndTimeA")
 
                                     log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                                    state.programmedCodes[lock.id].remove(i as String)
+                                    state.programmedCodes[lock.id].remove(user as String)
 
                                     state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                     //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1103,10 +1209,14 @@ def codeCheck() {
 
                     case 'Permanent':
                         if (code != null) {
-                            if (!state.programmedCodes[lock.id].contains(i as String)) {
+                            if (!state.programmedCodes[lock.id].contains(user as String)) {
                                 lock.setCode(user, code)
                                 log.debug "Requesting $lock to add permanent code $name to user $user, code: $code"
                                 sendNotificationEvent("Requesting $lock to add permanent code $name to user $user")
+                                if (disableRetry) {
+                                    log.info "Retry programming disabled, assuming user was added successfully to the lock"
+                                    state.programmedCodes[lock.id].add(user as String)
+                                }
 
                                 state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                 //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1119,15 +1229,15 @@ def codeCheck() {
                         break
 
                     case 'Inactive':
-                        if (state.programmedCodes[lock.id].contains(i as String)) {
-                            state.usedOneTimeCodes[lock.id].remove(i as String)
-                            state.trackUsedOneTimeCodes.add(i as String) // track it for reporting purposes
+                        if (state.programmedCodes[lock.id].contains(user as String)) {
+                            state.usedOneTimeCodes[lock.id].remove(user as String)
+                            state.trackUsedOneTimeCodes.add(user as String) // track it for reporting purposes
                             lock.deleteCode(user)
                             log.info "Requesting $lock to delete inactive user $user $name"
                             sendNotificationEvent("Requesting $lock to delete inactive user $user $name")
 
                             log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                            state.programmedCodes[lock.id].remove(i as String)
+                            state.programmedCodes[lock.id].remove(user as String)
 
                             state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                             //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1171,6 +1281,12 @@ def startTimer(seconds, function) {
     runIn(seconds, function, [overwrite: true]) // runOnce is having issues with v2 hubs, hopefully runIn is more stable
 }
 
+// Checks if we are within the current operating scheduled
+// Inputs to the function are user (i) and schedule (x) (there can be multiple schedules)
+// Preferences required in user input settings are:
+// settings."userStartTime${x}${i}"
+// settings."userEndTime${x}${i}"
+// settings."userDayOfWeek${x}${i}"
 private checkSchedule(def i, def x) {
 	log.debug("Checking operating schedule $x for user $i")
     
@@ -1200,7 +1316,8 @@ private checkSchedule(def i, def x) {
     log.debug("Operating DOW(s): ${settings."userDayOfWeek${x}${i}"}")
 
     if(settings."userDayOfWeek${x}${i}" == null) {
-    	log.error "Invalid Day of week ${settings."userDayOfWeek${x}${i}"}"
+    	log.warn "Day of week not specified for operating schedule $x for user $i, assuming no schedule set, so we are within schedule"
+        return true
     } else if(settings."userDayOfWeek${x}${i}".contains('All Week')) {
             doChange = true
     } else if((settings."userDayOfWeek${x}${i}".contains('Monday') || settings."userDayOfWeek${x}${i}".contains('Monday to Friday')) && currentDayOfWeek == Calendar.instance.MONDAY) {
@@ -1228,5 +1345,14 @@ private checkSchedule(def i, def x) {
     else {
         log.info("Outside operating schedule")
         return false
+    }
+}
+
+private sendText(number, message) {
+	if (sms) {
+    	def phones = sms.split("\\+")
+        for (phone in phones) {
+            sendSms(phone, message)
+        }
     }
 }
