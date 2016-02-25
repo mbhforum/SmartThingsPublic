@@ -15,9 +15,10 @@
  *
  * Copyright RBoy
  * Redistribution of any changes or code is not allowed without permission
- * Version 4.0.2
+ * Version 4.1.0
  *
  * Change Log:
+ * 2016-2-25 - Added support for tracking deleted codes confirmation from lock and retrying if lock doesn't confirm code deletions
  * 2016-2-20 - Added slot notification for unknown users
  * 2016-2-15 - Added current date/time stamp on hub for debugging timezone mismatches
  * 2016-2-15 - Default coding interval is now 60 seconds as the platform is crapping out in shorter intervals
@@ -508,14 +509,12 @@ def appTouch() {
     state.usedOneTimeCodes = [:]
     state.trackUsedOneTimeCodes = [] // Track for reporting purposes
     state.programmedCodes = [:] // List of active codes confirmed by locks
-    state.expiredCodes = [:]
     state.updateLockList = []
     state.expiredLockList = []
     atomicState.reLocks = [] // List of lock to relock after a timed delay
     atomicState.immediateLocks = [] // List of lock to lock immediately after a short delay
     atomicState.unLocks = [] // List of lock to unlock after a short delay
     for (lock in locks) {
-    	state.expiredCodes[lock.id] = [] // List of expired codes for this lock
         state.usedOneTimeCodes[lock.id] = [] // List of used one time codes for this lock
         state.programmedCodes[lock.id] = [] // List of verified/confirmed programmed codes for this lock
         state.updateLockList.add(lock.id) // reset the state for each lock to be processed with update
@@ -642,11 +641,24 @@ def codeResponse(evt) {
     def code = evt.data ? new JsonSlurper().parseText(evt.data)?.code : "" // Not all locks return a code due to a bug in the base Z-Wave lock device code
     def desc = evt.descriptionText // Description can have "is set" or "was added" or "changed" when code was added successfully
     def name = settings."userNames${user}"
-	log.trace "Code report $evt.name returned Name:${name}, User:${user}, Code:${code}, Desc:${desc}"
-    if ((!state.programmedCodes[lock.id].contains(user as String)) && (["is set", "was added", "changed"].any { desc.contains(it) })) {
+	log.trace "Code report $evt.name returned Name:${name ?: ""}, User:${user}, Code:${code}, Desc:${desc}"
+
+    if ((!state.programmedCodes[lock.id].contains(user as String)) && (["is set", "added", "changed"].any { desc.contains(it) })) { // We can get the notifications multiple times
         state.programmedCodes[lock.id].add(user as String)
         log.info "Confirmed $lock added $name to user $user"
         sendNotificationEvent("Confirmed $lock added $name to user $user")
+    }
+    
+    if ((state.programmedCodes[lock.id].contains(user as String)) && (["is not set", "deleted"].any { desc.contains(it) })) { // We can get the notifications multiple times (don't track "was reset" as that's an intermediary notification while setting a code)
+        state.programmedCodes[lock.id].remove(user as String)
+        log.info "Confirmed ${name ?: ""} user $user was deleted from $lock"
+        sendNotificationEvent("Confirmed ${name ?: ""} user $user was deleted from $lock")
+        
+        // Update tracking lists for used one time codes
+        if (state.usedOneTimeCodes[lock.id].contains(user as String)) {
+            state.usedOneTimeCodes[lock.id].remove(user as String)
+            log.trace "Deleted code was a used one time code, removing it from list of used one time codes"
+        }
     }
 }
 
@@ -937,13 +949,8 @@ def initializeCodes() {
                                         doAdd = true // we need to add the code
                                     }
                                 } else {
-                                    if (!state.expiredCodes[lock.id].contains(user as String)) {
-                                        state.expiredCodes[lock.id].add(user as String)
-                                        sendNotificationEvent("$lock user $user $name's code expired on $expStr")
-                                        log.debug "$lock user $user $name expired on $expStr"
-                                    } else {
-                                        log.error "$lock user $user $name is already tracked as expired"
-                                    }
+                                    sendNotificationEvent("$lock user $user $name's code expired on $expStr")
+                                    log.debug "$lock user $user $name expired on $expStr"
                                 }
                             } else {
                                 log.error "$lock User $user $name set to Expire but does not have a Expiration Date: $expDate or Time: $expTime"
@@ -1002,12 +1009,14 @@ def initializeCodes() {
                     }
                 } else { // Delete the slot
                     userCodes << ["code${user}", ""]
-                    log.info "Requesting $lock to delete user $user $name"
-                    sendNotificationEvent("Requesting $lock to delete user $user $name")
+                    log.debug "Requesting $lock to delete user $user ${name ?: ""}"
+                    sendNotificationEvent("Requesting $lock to delete user $user ${name ?: ""}")
 
                     if (state.programmedCodes[lock.id].contains(user as String)) { // At this stage there should be no codes in the programmed list
-                        log.error "Initialization ERROR: $name user $user exists in $lock list of confirmed programmed codes"
-                        state.programmedCodes[lock.id].remove(user as String)
+                        log.error "Initialization ERROR: ${name ?: ""} user $user exists in $lock list of confirmed programmed codes"
+                    } else {
+                        log.trace "Tracking ${name ?: ""} user $user to the list of programmed codes temporarily for $lock to confirm that code gets deleted"
+                        state.programmedCodes[lock.id].add(user as String) // Add it to the list so that we can get confirmation from the lock that the code was deleted
                     }
                 }
                 
@@ -1100,19 +1109,11 @@ def codeCheck() {
                                 def exp = expD.getTimeInMillis() + expT
                                 def expStr = (new Date(exp.value)).format("EEE MMM dd yyyy HH:mm z", location.timeZone)
                                 if (exp < now()) {
-                                    if (!state.expiredCodes[lock.id].contains(user as String)) {
-                                        state.expiredCodes[lock.id].add(user as String)
+                                    if (state.programmedCodes[lock.id].contains(user as String)) {
                                         lock.deleteCode(user)
-                                        log.info "Requesting $lock to delete expired user $user $name"
+                                        log.debug "Requesting $lock to delete expired user $user $name"
                                         sendNotificationEvent("Requesting $lock to delete expired user $user $name")
                                         
-                                        if (state.programmedCodes[lock.id].contains(user as String)) {
-                                        	log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                                        	state.programmedCodes[lock.id].remove(user as String)
-                                        } else {
-                                        	log.warn "$lock list of confirmed programmed codes does not contain $name user $user"
-                                        }
-
                                         state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                         //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
                                         startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
@@ -1124,24 +1125,29 @@ def codeCheck() {
                             } else {
                                 log.error "User $user $name set to Expire but does not have a valid Expiration Date/Time: $expDate or Time: $expTime"
                             }
+                        } else if (state.programmedCodes[lock.id].contains(user as String)) { // Code is null but the list shows programmed, i.e. we were asked to explicit send a delete command to the lock
+                            lock.deleteCode(user)
+                            log.debug "Requesting $lock to delete user $user $name"
+                            sendNotificationEvent("Requesting $lock to delete user $user $name")
+
+                            state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
+                            //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
+                            startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
+                            return // We are done here, exit out as we've scheduled the next update
+                        } else {
+                            log.debug "$lock ${name ?: ""} user $user already deleted"
                         }
                         break
 
                     case 'One time':
                     	if (code != null) {
                             if (state.usedOneTimeCodes[lock.id].contains(user as String)) {
-                                state.usedOneTimeCodes[lock.id].remove(user as String)
-                                state.trackUsedOneTimeCodes.add(user as String) // track it for reporting purposes
-                                lock.deleteCode(user)
-                                log.info "Requesting $lock to delete one time user $user $name"
-                                sendNotificationEvent("Requesting $lock to delete one time user $user $name")
-
-                                if (state.programmedCodes[lock.id].contains(user as String)) {
-                                    log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                                    state.programmedCodes[lock.id].remove(user as String)
-                                } else {
-                                    log.warn "$lock list of confirmed programmed codes does not contain $name user $user"
+                                if (!state.trackUsedOneTimeCodes.contains(user as String)) {
+                                    state.trackUsedOneTimeCodes.add(user as String) // track it for reporting purposes
                                 }
+                                lock.deleteCode(user)
+                                log.debug "Requesting $lock to delete one time user $user $name"
+                                sendNotificationEvent("Requesting $lock to delete one time user $user $name")
 
                                 state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                 //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1165,6 +1171,17 @@ def codeCheck() {
                                     log.debug "$lock User $user $name is a one time code but it has not been used yet"
                                 }
                             }
+                        } else if (state.programmedCodes[lock.id].contains(user as String)) { // Code is null but the list shows programmed, i.e. we were asked to explicit send a delete command to the lock
+                            lock.deleteCode(user)
+                            log.debug "Requesting $lock to delete user $user $name"
+                            sendNotificationEvent("Requesting $lock to delete user $user $name")
+
+                            state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
+                            //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
+                            startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
+                            return // We are done here, exit out as we've scheduled the next update
+                        } else {
+                            log.debug "$lock ${name ?: ""} user $user already deleted"
                         }
                         break
 
@@ -1192,11 +1209,8 @@ def codeCheck() {
                                     log.debug "$lock Scheduled user $user $name is already inactive, not removing again"
                                 } else {
                                     lock.deleteCode(user)
-                                    log.info "Requesting $lock to delete expired user $user $name because it is scheduled to work between $userDayOfWeekA: $userStartTimeA to $userEndTimeA"
+                                    log.debug "Requesting $lock to delete expired user $user $name because it is scheduled to work between $userDayOfWeekA: $userStartTimeA to $userEndTimeA"
                                     sendNotificationEvent("Requesting $lock to delete expired user $user $name because it is scheduled to work between $userDayOfWeekA: $userStartTimeA to $userEndTimeA")
-
-                                    log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                                    state.programmedCodes[lock.id].remove(user as String)
 
                                     state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                                     //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
@@ -1204,6 +1218,17 @@ def codeCheck() {
                                     return // We are done here, exit out as we've scheduled the next update
                                 }
                             }
+                        } else if (state.programmedCodes[lock.id].contains(user as String)) { // Code is null but the list shows programmed, i.e. we were asked to explicit send a delete command to the lock
+                            lock.deleteCode(user)
+                            log.debug "Requesting $lock to delete user $user $name"
+                            sendNotificationEvent("Requesting $lock to delete user $user $name")
+
+                            state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
+                            //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
+                            startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
+                            return // We are done here, exit out as we've scheduled the next update
+                        } else {
+                            log.debug "$lock ${name ?: ""} user $user already deleted"
                         }
                         break
 
@@ -1225,33 +1250,39 @@ def codeCheck() {
                             } else {
                                 log.debug "$lock User $user $name is a permanent code and is already active"
                             }
-                        }
-                        break
-
-                    case 'Inactive':
-                        if (state.programmedCodes[lock.id].contains(user as String)) {
-                            state.usedOneTimeCodes[lock.id].remove(user as String)
-                            state.trackUsedOneTimeCodes.add(user as String) // track it for reporting purposes
+                        } else if (state.programmedCodes[lock.id].contains(user as String)) { // Code is null but the list shows programmed, i.e. we were asked to explicit send a delete command to the lock
                             lock.deleteCode(user)
-                            log.info "Requesting $lock to delete inactive user $user $name"
-                            sendNotificationEvent("Requesting $lock to delete inactive user $user $name")
-
-                            log.trace "Removing $name user $user from $lock list of confirmed programmed codes"
-                            state.programmedCodes[lock.id].remove(user as String)
+                            log.debug "Requesting $lock to delete user $user $name"
+                            sendNotificationEvent("Requesting $lock to delete user $user $name")
 
                             state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
                             //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
                             startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
                             return // We are done here, exit out as we've scheduled the next update
                         } else {
-                            log.debug "$lock $name user $user already inactive"
+                            log.debug "$lock ${name ?: ""} user $user already deleted"
+                        }
+                        break
+
+                    case 'Inactive':
+                        if (state.programmedCodes[lock.id].contains(user as String)) {
+                            lock.deleteCode(user)
+                            log.debug "Requesting $lock to delete inactive user $user $name"
+                            sendNotificationEvent("Requesting $lock to delete inactive user $user $name")
+
+                            state.expiredNextCode = state.expiredNextCode + 1 // move onto the next code
+                            //log.trace "Scheduled next code check in ${sendDelay > 0 ? sendDelay : 15} seconds"
+                            startTimer((sendDelay > 0 ? sendDelay : 15), codeCheck) // schedule the next code update after a few seconds otherwise it overloads locks and doesn't work
+                            return // We are done here, exit out as we've scheduled the next update
+                        } else {
+                            log.debug "$lock ${name ?: ""} user $user already inactive"
                         }
                     	break
 
 
                     default:
-                        log.error "Invalid user type $userType, user $user $name"
-                        sendNotificationEvent("Invalid user type $userType, user $user $name")
+                        log.error "Invalid user type $userType, user $user ${name ?: ""}"
+                        sendNotificationEvent("Invalid user type $userType, user $user ${name ?: ""}")
                         break
                 }
 

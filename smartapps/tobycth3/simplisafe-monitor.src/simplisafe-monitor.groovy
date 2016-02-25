@@ -2,7 +2,7 @@
  *  SimpliSafe Monitor
  *
  *  Author: toby@cth3.com
- *  Date: 2/15/16
+ *  Date: 2/24/16
  *
  *  Monitors and controlls the state of a SimpliSafe alarm system, syncs with Smart Home Monitor, sets SimpliSafe based on location mode and can turn on/off switchs based on SimpliSafe state.
  *  Works in conjunction with SimpliSafe Alarm Integration device type.
@@ -115,44 +115,38 @@ state.shmstate = evt.value
 }
 
 def setalarmoff() {
-      def message = "${app.label} set SimpliSafe to Off"
+      def message = "Setting SimpliSafe to Off"
       log.info(message)
       send(message)
       alarmsystem.off()
   }
   
 def setalarmaway() {
-      def message = "${app.label} set SimpliSafe to Away"
+      def message = "Setting SimpliSafe to Away"
       log.info(message)
       send(message)
       alarmsystem.away()
   }
   
 def setalarmhome() {
-      def message = "${app.label} set SimpliSafe to Home"
+      def message = "Setting SimpliSafe to Home"
       log.info(message)
       send(message)
       alarmsystem.home()
   }
 
 def setshmoff() {
-      def message = "${app.label} set Smart Home Monitor to Off"
-      log.info(message)
-      send(message)
+      log.info("Setting Smart Home Monitor to Off")
       sendLocationEvent(name: "alarmSystemStatus", value: "off")
   }
   
 def setshmaway() {
-      def message = "${app.label} set Smart Home Monitor to Away"
-      log.info(message)
-      send(message)
+      log.info("Setting Smart Home Monitor to Away")
      sendLocationEvent(name: "alarmSystemStatus", value: "away")
   }
   
 def setshmstay() {
-      def message = "${app.label} set Smart Home Monitor to Stay"
-      log.info(message)
-      send(message)
+      log.info("Setting Smart Home Monitor to Stay")
     sendLocationEvent(name: "alarmSystemStatus", value: "stay")
   }
 
