@@ -15,9 +15,10 @@
  *
  * Copyright RBoy
  * Redistribution of any changes or code is not allowed without permission
- * Version 4.1.0
+ * Version 4.1.1
  *
  * Change Log:
+ * 2016-2-27 - Renamed option to retry to clarify, now it is to stop reverrification and overwriting all codes (default is incremental updates)
  * 2016-2-25 - Added support for tracking deleted codes confirmation from lock and retrying if lock doesn't confirm code deletions
  * 2016-2-20 - Added slot notification for unknown users
  * 2016-2-15 - Added current date/time stamp on hub for debugging timezone mismatches
@@ -120,9 +121,10 @@ def setupApp() {
 		}
 
 		section("Code Programming Options (advanced) (optional)") {
+            paragraph "By default, for security purposes, the app rewrites all codes on the lock and re-verfies them each time the app is opened. If your SmartThings setup is working reliably and you update codes often you can enable this option to only update the codes which have changed to save programming time and battery. This option will also disable the re-verification feature."
+            input name: "disableRetry", title: "Enable incremental updates only and disable re-verification", type: "bool", required: false
             paragraph "Change this setting if all the user codes aren't being programmed on the lock correctly. This settings determines the time gap between sending each user code to the lock. If the codes are sent too fast, they may fail to be set properly."
             input name: "sendDelay", title: "Delay between codes (seconds):", type: "number", defaultValue: "60", required: false
-            input name: "disableRetry", title: "Don't retry code reprogramming on failure", type: "bool", required: false
         }
     }
 }
