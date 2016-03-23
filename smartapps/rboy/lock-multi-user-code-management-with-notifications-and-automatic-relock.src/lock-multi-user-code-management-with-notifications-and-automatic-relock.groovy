@@ -15,9 +15,10 @@
  *
  * Copyright RBoy
  * Redistribution of any changes or code is not allowed without permission
- * Version 4.1.1
+ * Version 4.2.0
  *
  * Change Log:
+ * 2016-3-21 - Added a heartbeat system to improve the reliability of the code check scheduler to compensate for the issues folks are seeing with the ST platform broken timers
  * 2016-2-27 - Renamed option to retry to clarify, now it is to stop reverrification and overwriting all codes (default is incremental updates)
  * 2016-2-25 - Added support for tracking deleted codes confirmation from lock and retrying if lock doesn't confirm code deletions
  * 2016-2-20 - Added slot notification for unknown users
@@ -168,7 +169,7 @@ def unlockActionsPage(params) {
     def user = atomicState.params?.user ?: ""
 	def name = user ? settings."userNames${user}" : ""
     
-    log.trace "Unlock Action Page, user:$user, name:$name, params:$atomicState.params"
+    log.trace "Unlock Action Page, user:$user, name:$name, passed params: $params, saved params:$atomicState.params"
 
     dynamicPage(name:"unlockActionsPage", title: "Setup unlock actions for each door" + (user ? " for user $name." : ""), uninstall: false, install: false) {
         def phrases = location.helloHome?.getPhrases()*.label
@@ -497,6 +498,10 @@ def appTouch() {
     subscribe(locks, "codeReport", codeResponse, [filterEvents:false]) // Subscribe to code report events to see if the code update was successful
     subscribe(locks, "codeChanged", codeResponse, [filterEvents:false]) // Subscribe to code report events to see if the code update was successful
 
+    // Reset the code update trackers and heartbeat system
+    state.lastCheck = 0
+    state.lastHeartBeat = 0
+    
     locks.each { lock -> // check each lock individually
         if (settings."sensor${lock}") {
         	log.trace "Subscribing to sensor ${settings."sensor${lock}"} for ${lock}"
@@ -1048,6 +1053,16 @@ def codeCheck() {
     
     log.trace "The date/time on the hub now is ${(new Date(now())).format("EEE MMM dd yyyy HH:mm z", location.timeZone)}"
 
+    // Hack for broken ST timers - Schedule the Heartbeat
+    if (((state.lastHeartBeat ?: 0) + ((10+5)*60*1000) < now()) && canSchedule()) { // Since we are scheduling the heartbeat every 10 minutes, give it a 5 minute grace
+        log.warn "Heartbeat not called in last 15 minutes, rescheduling heartbeat"
+        schedule("* */10 * * * ?", heartBeatMonitor) // run the heartbeat every 10 minutes
+        state.lastHeartBeat = now() // give it 10 minutes before you schedule it again
+    }
+
+    // Update the last time we can code check
+    state.lastCheck = now()
+    
     for (lock in locks) {
         if (state.expiredLockList.contains(lock.id)) { // this lock codes hasn't been completely initiated
             log.trace "Verifying internal status for codes on $lock"
@@ -1305,6 +1320,19 @@ def codeCheck() {
     }
 
     runEvery5Minutes(codeCheck) // schedule the next code check in 5 minutes, hopefully runEveryXMinute is more reliable than runIn and runOnce in the long run with v2 hubs
+}
+
+// Heartbeat system to ensure that the MonitorTask doesn't die when it's supposed to be running
+def heartBeatMonitor() {
+    log.trace "Heartbeat monitor called"
+    
+    state.lastHeartBeat = now() // Save the last time we were executed
+
+    log.trace "Last code check was done " + ((now() - (state.lastCheck ?: 0))/1000) + " seconds ago"
+    if ((((state.lastCheck ?: 0) + (5*60*1000) + (60*1000)) < now()) && canSchedule()) { // Kick start the motion detection monitor if didn't update for more than 60 seconds beyond the polling period (5 minutes)
+        log.warn "Code check hasn't been run a long time, calling it to kick start it"
+        codeCheck()
+    }
 }
 
 def startTimer(seconds, function) {
