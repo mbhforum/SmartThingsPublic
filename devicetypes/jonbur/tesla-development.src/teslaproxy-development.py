@@ -7,7 +7,8 @@ from config import *
 
 
 def establish_connection(token=None):
-	c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD, access_token=token)
+	#c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD, access_token=token)
+	c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD)
 	return c
 
 def get_climate(c, car):
