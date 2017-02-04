@@ -232,9 +232,9 @@ def refresh():
 	data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
 	data['isclimateon'] = str(get_isclimateon(c, VEHICLE_VIN))
 	data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
-	data['iscarcharging'] = str(get_iscarcharging(c, VEHICLE_VIN))
-	data['getbatterylevel'] = str(get_batterylevel(c, VEHICLE_VIN))
-	data['getbatteryrange'] = str(get_batteryrange(c, VEHICLE_VIN))
-	data['gettimetocharge'] = str(get_timetocharge(c, VEHICLE_VIN))
+	#data['iscarcharging'] = str(get_iscarcharging(c, VEHICLE_VIN))
+	#data['getbatterylevel'] = str(get_batterylevel(c, VEHICLE_VIN))
+	#data['getbatteryrange'] = str(get_batteryrange(c, VEHICLE_VIN))
+	#data['gettimetocharge'] = str(get_timetocharge(c, VEHICLE_VIN))
 	return json.dumps(data)
 
