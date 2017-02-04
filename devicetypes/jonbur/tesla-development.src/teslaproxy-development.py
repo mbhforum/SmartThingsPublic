@@ -10,12 +10,14 @@ TeslaConnection = ""
 
 def establish_connection():
 	global TeslaConnection
-	if type(TeslaConnection) is teslajson.Connection
+	if isinstance(TeslaConnection, teslajson.Connection):
+		print "Existing connection"
 		return TeslaConnection
-	else
+	else:
 		#c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD, access_token=token)
 		c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD)
 		TeslaConnection = c
+		print "Connected again"
 		return c
 
 def get_climate(c, car):
@@ -239,9 +241,9 @@ def refresh():
 	chargestatus = get_chargestatus(c, VEHICLE_VIN)
 	
 	data = {}
-	#data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
-	#data['isclimateon'] = str(get_isclimateon(c, VEHICLE_VIN))
-	#data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
+	data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
+	data['isclimateon'] = str(get_isclimateon(c, VEHICLE_VIN))
+	data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
 	data['iscarcharging'] = str(chargestatus['charging_state'])
 	data['getbatterylevel'] = str(chargestatus['battery_level'])
 	data['getbatteryrange'] = str(chargestatus['battery_range'])
