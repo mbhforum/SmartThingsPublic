@@ -78,8 +78,7 @@ def get_chargestatus(c, car):
 	chargestatus = None
 	for v in c.vehicles:
 		if v["vin"] == car:
-			d = v.data_request("charge_state")
-			chargestatus = d
+			chargestatus = v.data_request("charge_state")
 	return chargestatus
 
 def get_iscarcharging(c,car):
@@ -228,13 +227,17 @@ def chargestop():
 @app.route('/api/refresh')
 def refresh():
 	c = establish_connection()
+	
+	chargestatus = get_chargestatus(c, VEHICLE_VIN)
+	
 	data = {}
 	data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
 	data['isclimateon'] = str(get_isclimateon(c, VEHICLE_VIN))
 	data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
-	#data['iscarcharging'] = str(get_iscarcharging(c, VEHICLE_VIN))
-	#data['getbatterylevel'] = str(get_batterylevel(c, VEHICLE_VIN))
-	#data['getbatteryrange'] = str(get_batteryrange(c, VEHICLE_VIN))
-	#data['gettimetocharge'] = str(get_timetocharge(c, VEHICLE_VIN))
+	data['iscarcharging'] = str(chargestatus['charging_state'])
+	data['getbatterylevel'] = str(chargestatus['battery_level'])
+	data['getbatteryrange'] = str(chargestatus['battery_range'])
+	data['gettimetocharge'] = str(chargestatus['time_to_full_charge'])
+	
 	return json.dumps(data)
 
