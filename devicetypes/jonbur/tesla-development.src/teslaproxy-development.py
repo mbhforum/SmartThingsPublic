@@ -5,10 +5,15 @@ from geopy.distance import vincenty
 import json
 from config import *
 
+TeslaConnection = ""
+
 
 def establish_connection():
+	global TeslaConnection
+	print type(TeslaConnection)
 	#c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD, access_token=token)
 	c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD)
+	TeslaConnection = c
 	return c
 
 def get_climate(c, car):
