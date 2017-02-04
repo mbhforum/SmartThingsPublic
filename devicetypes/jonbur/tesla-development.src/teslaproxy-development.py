@@ -6,7 +6,7 @@ import json
 from config import *
 
 
-def establish_connection(token=None):
+def establish_connection():
 	#c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD, access_token=token)
 	c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD)
 	return c
@@ -232,9 +232,9 @@ def refresh():
 	chargestatus = get_chargestatus(c, VEHICLE_VIN)
 	
 	data = {}
-	data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
-	data['isclimateon'] = str(get_isclimateon(c, VEHICLE_VIN))
-	data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
+	#data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
+	#data['isclimateon'] = str(get_isclimateon(c, VEHICLE_VIN))
+	#data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
 	data['iscarcharging'] = str(chargestatus['charging_state'])
 	data['getbatterylevel'] = str(chargestatus['battery_level'])
 	data['getbatteryrange'] = str(chargestatus['battery_range'])
