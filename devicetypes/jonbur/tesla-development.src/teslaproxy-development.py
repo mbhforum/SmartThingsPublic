@@ -14,7 +14,6 @@ def establish_connection():
 		print "Existing connection"
 		return TeslaConnection
 	else:
-		#c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD, access_token=token)
 		c = teslajson.Connection(email=TESLA_EMAIL, password=TESLA_PASSWORD)
 		TeslaConnection = c
 		print "Connected again"
@@ -98,7 +97,7 @@ def get_batterylevel(c,car):
 	return get_chargestatus(c, car)['battery_level']
 
 def get_batteryrange(c,car):
-	return get_chargestatus(c, car)['battery_range']
+	return get_chargestatus(c, car)['ideal_battery_range']
 
 def get_timetocharge(c,car):
 	return get_chargestatus(c, car)['time_to_full_charge']
@@ -246,7 +245,7 @@ def refresh():
 	data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
 	data['iscarcharging'] = str(chargestatus['charging_state'])
 	data['getbatterylevel'] = str(chargestatus['battery_level'])
-	data['getbatteryrange'] = str(chargestatus['battery_range'])
+	data['getbatteryrange'] = str(chargestatus['ideal_battery_range'])
 	data['gettimetocharge'] = str(chargestatus['time_to_full_charge'])
 	
 	return json.dumps(data)
