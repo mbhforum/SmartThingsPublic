@@ -1,5 +1,4 @@
 import groovy.json.JsonSlurper
-//Comment
 metadata {
     definition (name: "Tesla-Development", namespace: "jonbur", author: "JB-MBH") {
         capability "Polling"
@@ -8,10 +7,13 @@ metadata {
         capability "presenceSensor"
         capability "Lock"
         capability "battery"
+        capability "Temperature Measurement"
 
         command "refresh"
         command "chargestart"
         command "chargestop"
+        command "SetpointUp"
+        command "SetpointDown"
 
         attribute "network","string"
         attribute "batteryState", "string"
@@ -19,13 +21,16 @@ metadata {
         attribute "chargestart", "string"
         attribute "chargestop", "string"
         attribute "timetocharge", "string"
+        attribute "temperatureScale", "string"
+        attribute "temperature", "number"
     }
 
     preferences {
         input("ip", "text", title: "IP Address", description: "Local server IP address", required: true, displayDuringSetup: true)
         input("port", "number", title: "Port Number", description: "Port Number (Default:5000)", defaultValue: "5000", required: true, displayDuringSetup: true)
+    	input("temperatureScale", "enum", title: "Temperature Unit:", options: ["F", "C"], required: true, displayDuringSetup: true)
     }
-
+    
     tiles (scale:2) {
         multiAttributeTile(name:"toggle", type: "generic", width: 6, height: 4){
             tileAttribute ("device.lock", key: "PRIMARY_CONTROL") {
@@ -40,10 +45,9 @@ metadata {
             attributeState "Disconnected", label: 'Charging Status: Not Charging'
             attributeState "Complete", label: 'Charging Status: Complete'
             attributeState "Stopped", label: 'Charging Status: Stopped'
-            }
-
+        	}
         }
-
+        
 		standardTile("switch", "device.switch", width: 2, height: 2, canChangeIcon: true) {
             state "on", label:'${name}', action:"switch.off", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#79b821", nextState:"turningOff"
             state "off", label:'${name}', action:"switch.on", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ffffff", nextState:"turningOn"
@@ -51,8 +55,79 @@ metadata {
             state "turningOff", label:'${name}', action:"switch.on", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ffffff", nextState:"turningOn"
             state "offline", label:'${name}', icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ff0000"
         }
-
-        valueTile("battery", "device.battery", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
+		
+        standardTile("DriverSide", "device.DriverSide", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', icon:"http://i66.tinypic.com/95pjbd.png"
+			state "", label: ''
+		}
+        
+        standardTile("DriverTemperatureUp", "device.DriverTemperatureUp", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', action:"SetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
+			state "", label: ''
+		}
+               
+        valueTile("drivertemp", "device.drivertemp", width: 1, height: 1, inactiveLabel: false) {
+            state "drivertemp", label:'${currentValue}°', unit:"",
+            backgroundColors:
+            [
+                [value: 31, color: "#153591"],
+                [value: 44, color: "#1e9cbb"],
+                [value: 59, color: "#90d2a7"],
+                [value: 74, color: "#44b621"],
+                [value: 84, color: "#f1d801"],
+                [value: 95, color: "#d04e00"],
+                [value: 96, color: "#bc2323"]
+            ]
+        }
+        
+		standardTile("DriverTemperatureDown", "device.DriverTemperatureDown", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', action:"SetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
+			state "", label: ''
+		}
+        
+        standardTile("PassengerSide", "device.PassengerSide", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', icon:"http://i67.tinypic.com/2lm04lj.png"
+			state "", label: ''
+		}
+        
+        standardTile("PassengerTemperatureUp", "device.PassengerTemperatureUp", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', action:"SetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
+			state "", label: ''
+		}
+        
+        valueTile("passtemp", "device.passtemp", width: 1, height: 1, inactiveLabel: false) {
+            state "passtemp", label:'${currentValue}°', unit:"",
+            backgroundColors:
+            [
+                [value: 31, color: "#153591"],
+                [value: 44, color: "#1e9cbb"],
+                [value: 59, color: "#90d2a7"],
+                [value: 74, color: "#44b621"],
+                [value: 84, color: "#f1d801"],
+                [value: 95, color: "#d04e00"],
+                [value: 96, color: "#bc2323"]
+            ]
+        }
+        standardTile("Passdriverdown", "device.Passdriverdown", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', action:"SetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
+			state "", label: ''
+		}
+       
+        valueTile("temperature", "device.temperature", width: 2, height: 2, inactiveLabel: false) {
+            state "temperature", label:'${currentValue}°', unit:"",
+            backgroundColors:
+            [
+                [value: 31, color: "#153591"],
+                [value: 44, color: "#1e9cbb"],
+                [value: 59, color: "#90d2a7"],
+                [value: 74, color: "#44b621"],
+                [value: 84, color: "#f1d801"],
+                [value: 95, color: "#d04e00"],
+                [value: 96, color: "#bc2323"]
+            ]
+        }
+       
+       valueTile("battery", "device.battery", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
         	state "battery", label:'Battery: ${currentValue}%', unit:""
 		}
 
@@ -64,10 +139,10 @@ metadata {
         	state "chargestart", action: "chargestart",	icon: "http://i67.tinypic.com/52zyo7.png"}
 
         standardTile("chargestop", "device.chargestop", width:1, height:1, decoration: "flat") {
-        	state "chargestop", action: "chargestop",icon: "http://i65.tinypic.com/24l4o5j.jpg"}
+        	state "chargestop", action: "chargestop",icon: "http://i67.tinypic.com/14x2joj.png"}
 
         valueTile("timetocharge", "device.timetocharge", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
-        	state "timetocharge", label:'Time to reach full battery: ${currentValue}', unit:""
+        	state "timetocharge", label:'Hours to reach full battery: ${currentValue}', unit:""
         }
 
         standardTile("presence", "device.presence", width: 3, height: 2, canChangeBackground: true) {
@@ -78,8 +153,8 @@ metadata {
         standardTile("refresh", "device.switch", inactiveLabel: false, height: 1, width: 1, decoration: "flat") {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
         }
-    }
-}
+   }
+   }
 
 def parse(String description) {
     def map
@@ -87,15 +162,17 @@ def parse(String description) {
     def bodyString
     def slurper
     def result
-
+    
     map = stringToMap(description)
     headerString = new String(map.headers.decodeBase64())
 
     if (headerString.contains("200 OK")) {
-    
+    	
         bodyString = new String(map.body.decodeBase64())
         slurper = new JsonSlurper()
         result = slurper.parseText(bodyString)
+        
+   		log.debug result
 
         switch (result.isclimateon) {
             case "False":
@@ -126,10 +203,15 @@ def parse(String description) {
                 present()
             }
 
+            sendEvent(name:"temperature", value:result.insidetemp)
+            //sendEvent(name:"temperature", value:math.round((result.insidetemp) * 1.8 + 32)*100) /100
             sendEvent(name:"battery", value:result.getbatterylevel)
             sendEvent(name:"batteryRange", value:result.getbatteryrange)
             sendEvent(name:"timetocharge", value:result.gettimetocharge)
+            sendEvent(name:"drivertemp", value:result.drivertemp)
+     		sendEvent(name:"passtemp", value:result.passtemp) 
 
+            
         switch (result.iscarcharging) {
             case "Disconnected":
                 log.debug 'Vehicle is not charging'
@@ -206,6 +288,24 @@ def lock() {
 	api('lock')
 }
 
+def insidetemp() {
+	log.debug "Executing Inside Temperature Query"
+    ipSetup()
+    api('insidetemp')
+}
+
+def drivertemp() {
+	log.debug "Executing Driver Temperature Query"
+    ipSetup()
+    api('drivertemp')
+}
+
+def passtemp() {
+	log.debug "Executing Passenger Temperature Query"
+    ipSetup()
+    api('passtemp')
+}
+
 def getbattery() {
 	log.debug "Executing Battery Level Query"
 	ipSetup()
@@ -244,7 +344,6 @@ def gettimetocharge() {
 
 def poll() {
 	log.debug "Executing 'poll'"
-
 	if (device.deviceNetworkId != null) {
 		refresh()
 	}
@@ -261,76 +360,88 @@ def refresh() {
 	api('refresh')
 }
 
-def api(String rooCommand, success = {}) {
-def rooPath
+def api(String APICommand, success = {}) {
+def APIPath
 def hubAction
 
-switch (rooCommand) {
+switch (APICommand) {
 	case "on":
-		rooPath = "/api/starthvac"
+		APIPath = "/api/starthvac"
 		log.debug "The start command was sent"
 		break;
 	case "off":
-		rooPath = "/api/stophvac"
+		APIPath = "/api/stophvac"
 		log.debug "The stop command was sent"
 		break;
 	case "isclimateon":
-		rooPath = "/api/isclimateon"
+		APIPath = "/api/isclimateon"
 		log.debug "Request if climate is on sent"
 		break;	
 	case "ishome":
-		rooPath = "/api/isvehiclehome"
+		APIPath = "/api/isvehiclehome"
 		log.debug "Request if vehicle is home sent"
 		break;
 	case "unlock":
-		rooPath = "/api/doorunlock"
+		APIPath = "/api/doorunlock"
 		log.debug "Unlocking Door"
 		break;
 	case "lock":
-		rooPath = "/api/doorlock"
+		APIPath = "/api/doorlock"
 		log.debug "Locking door"
 		break;
 	case "islocked":
-		rooPath = "/api/iscarlocked"
+		APIPath = "/api/iscarlocked"
 		log.debug "Request if car is locked sent"
 		break;
-	case "getbattery":
-		rooPath = "/api/getbatterylevel"
+	case "insidetemp":
+    	APIPath =  "/api/insidetemp"
+        log.debug "Request inside temperature"
+        break;
+    case "drivertemp":
+    	APIPath = "/api/drivertemp"
+        log.debug "Request driver temperature"
+        break;
+    case "passtemp":
+    	APIPath = "/api/passtemp"
+        log.debug "Request passenger temperature"
+    	break;  
+    case "getbattery":
+		APIPath = "/api/getbatterylevel"
 		log.debug "Request battery level"
 		break;
 	case "getcharging":
-		rooPath = "/api/iscarcharging"
+		APIPath = "/api/iscarcharging"
 		log.debug "Request Charging Info"
 		break;
-		case "getbatteryrange":
-		rooPath = "/api/getbatteryrange"
+	case "getbatteryrange":
+		APIPath = "/api/getbatteryrange"
 		log.debug "Request battery range"
 		break;
 	case "chargestart":
-		rooPath = "/api/chargestart"
+		APIPath = "/api/chargestart"
 		log.debug "Sending Charge Start Command to Vehicle"
 		break;
 	case "chargestop":
-		rooPath = "/api/chargestop"
+		APIPath = "/api/chargestop"
 		log.debug "Sending Charge Stop Command to Vehicle"
 		break;
 	case "gettimetocharge":
-		rooPath = "/api/gettimetocharge"
+		APIPath = "/api/gettimetocharge"
 		log.debug "Getting Time to Charge"
 	break;
 	case "refresh":
-		rooPath = "/api/refresh"
-		log.debug "request Refresh"
+		APIPath = "/api/refresh"
+        log.debug "request Refresh"
 	break;
 }
 
-switch (rooCommand) {
-	case ["isclimateon", "ishome", "islocked", "getbattery", "getbatteryrange", "getcharging","gettimetocharge","refresh"]:
-		log.debug rooCommand
+switch (APICommand) {
+	case ["isclimateon", "ishome", "islocked", "insidetemp", "getbattery", "getbatteryrange", "getcharging", "gettimetocharge", "drivertemp", "passtemp", "refresh"]:
+		log.debug APICommand
 		try {
 			hubAction = new physicalgraph.device.HubAction(
 			method: "GET",
-			path: rooPath,
+			path: APIPath,
 			headers: [HOST: "${settings.ip}:${settings.port}", Accept: "application/json"])
 		}
 		catch (Exception e) {
@@ -341,7 +452,7 @@ switch (rooCommand) {
 		try {
 			hubAction = [new physicalgraph.device.HubAction(
 			method: "GET",
-			path: rooPath,
+			path: APIPath,
 			headers: [HOST: "${settings.ip}:${settings.port}", Accept: "application/json"]
 		), delayAction(1000), refresh()]
 		}
@@ -366,7 +477,6 @@ def ipSetup() {
 		device.deviceNetworkId = "$hosthex:$porthex"
 	}
 }
-
 private String convertIPtoHex(ip) { 
 	String hexip = ip.tokenize( '.' ).collect { String.format( '%02x', it.toInteger() ) }.join()
 	return hexip
@@ -380,7 +490,7 @@ private delayAction(long time) {
 }
 
 private def textVersion() {
-	def text = "Version 0.1"
+	def text = "Version 0.2"
 }
 
 private def textCopyright() {
