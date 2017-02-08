@@ -15,20 +15,19 @@ metadata {
         command "SetpointUp"
         command "SetpointDown"
 
-        attribute "network","string"
+        attribute "network", "string"
         attribute "batteryState", "string"
         attribute "batteryRange", "string"
         attribute "chargestart", "string"
         attribute "chargestop", "string"
         attribute "timetocharge", "string"
-        attribute "temperatureScale", "string"
         attribute "temperature", "number"
     }
 
     preferences {
         input("ip", "text", title: "IP Address", description: "Local server IP address", required: true, displayDuringSetup: true)
         input("port", "number", title: "Port Number", description: "Port Number (Default:5000)", defaultValue: "5000", required: true, displayDuringSetup: true)
-    	input("temperatureScale", "enum", title: "Temperature Unit:", options: ["F", "C"], required: true, displayDuringSetup: true)
+    	input("tempScale", "enum", title: "Temperature Unit:", options: ["Celcius", "Fahrenheit"], defaultValue: "Celcius", required: true, displayDuringSetup: true)
     }
     
     tiles (scale:2) {
@@ -67,16 +66,24 @@ metadata {
 		}
                
         valueTile("drivertemp", "device.drivertemp", width: 1, height: 1, inactiveLabel: false) {
-            state "drivertemp", label:'${currentValue}°', unit:"",
+            state "drivertemp", label:'${currentValue}°', unit:units,
             backgroundColors:
             [
-                [value: 31, color: "#153591"],
-                [value: 44, color: "#1e9cbb"],
-                [value: 59, color: "#90d2a7"],
-                [value: 74, color: "#44b621"],
-                [value: 84, color: "#f1d801"],
-                [value: 95, color: "#d04e00"],
-                [value: 96, color: "#bc2323"]
+                // Celcius Color Range
+   				[value: 7, color: "#1e9cbb"],
+				[value: 15, color: "#90d2a7"],
+				[value: 23, color: "#44b621"],
+				[value: 29, color: "#f1d801"],
+				[value: 33, color: "#d04e00"],
+				[value: 36, color: "#bc2323"],
+				// Fahrenheit Color Range
+				[value: 40, color: "#153591"],
+				[value: 44, color: "#1e9cbb"],
+				[value: 59, color: "#90d2a7"],
+				[value: 74, color: "#44b621"],
+				[value: 84, color: "#f1d801"],
+				[value: 92, color: "#d04e00"],
+				[value: 96, color: "#bc2323"]
             ]
         }
         
@@ -96,16 +103,24 @@ metadata {
 		}
         
         valueTile("passtemp", "device.passtemp", width: 1, height: 1, inactiveLabel: false) {
-            state "passtemp", label:'${currentValue}°', unit:"",
+            state "passtemp", label:'${currentValue}°', unit:units,
             backgroundColors:
             [
-                [value: 31, color: "#153591"],
-                [value: 44, color: "#1e9cbb"],
-                [value: 59, color: "#90d2a7"],
-                [value: 74, color: "#44b621"],
-                [value: 84, color: "#f1d801"],
-                [value: 95, color: "#d04e00"],
-                [value: 96, color: "#bc2323"]
+                // Celcius Color Range
+   				[value: 7, color: "#1e9cbb"],
+				[value: 15, color: "#90d2a7"],
+				[value: 23, color: "#44b621"],
+				[value: 29, color: "#f1d801"],
+				[value: 33, color: "#d04e00"],
+				[value: 36, color: "#bc2323"],
+				// Fahrenheit Color Range
+				[value: 40, color: "#153591"],
+				[value: 44, color: "#1e9cbb"],
+				[value: 59, color: "#90d2a7"],
+				[value: 74, color: "#44b621"],
+				[value: 84, color: "#f1d801"],
+				[value: 92, color: "#d04e00"],
+				[value: 96, color: "#bc2323"]
             ]
         }
         standardTile("Passdriverdown", "device.Passdriverdown", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
@@ -114,16 +129,24 @@ metadata {
 		}
        
         valueTile("temperature", "device.temperature", width: 2, height: 2, inactiveLabel: false) {
-            state "temperature", label:'${currentValue}°', unit:"",
+            state "temperature", label:'${currentValue}°', unit:units,
             backgroundColors:
             [
-                [value: 31, color: "#153591"],
-                [value: 44, color: "#1e9cbb"],
-                [value: 59, color: "#90d2a7"],
-                [value: 74, color: "#44b621"],
-                [value: 84, color: "#f1d801"],
-                [value: 95, color: "#d04e00"],
-                [value: 96, color: "#bc2323"]
+                // Celcius Color Range
+   				[value: 7, color: "#1e9cbb"],
+				[value: 15, color: "#90d2a7"],
+				[value: 23, color: "#44b621"],
+				[value: 29, color: "#f1d801"],
+				[value: 33, color: "#d04e00"],
+				[value: 36, color: "#bc2323"],
+				// Fahrenheit Color Range
+				[value: 40, color: "#153591"],
+				[value: 44, color: "#1e9cbb"],
+				[value: 59, color: "#90d2a7"],
+				[value: 74, color: "#44b621"],
+				[value: 84, color: "#f1d801"],
+				[value: 92, color: "#d04e00"],
+				[value: 96, color: "#bc2323"]
             ]
         }
        
@@ -180,7 +203,6 @@ def parse(String description) {
             break;
             case "True":
                 sendEvent(name: 'switch', value: "on" as String)
-
             }
 
         switch (result.iscarlocked) {
@@ -203,14 +225,24 @@ def parse(String description) {
                 present()
             }
 
-            sendEvent(name:"temperature", value:result.insidetemp)
-            //sendEvent(name:"temperature", value:math.round((result.insidetemp) * 1.8 + 32)*100) /100
+            log.debug settings.tempScale
+            def temp = result.insidetemp.toBigDecimal()
+            def curTemp = cToF(temp)
+           	sendEvent(name:"temperature", value:curTemp as Integer)
+                        
             sendEvent(name:"battery", value:result.getbatterylevel)
             sendEvent(name:"batteryRange", value:result.getbatteryrange)
             sendEvent(name:"timetocharge", value:result.gettimetocharge)
-            sendEvent(name:"drivertemp", value:result.drivertemp)
-     		sendEvent(name:"passtemp", value:result.passtemp) 
-
+            
+            
+            def drivertemp2 = result.drivertemp.toBigDecimal()
+        	def curdriverTemp = cToF(drivertemp2)
+            sendEvent(name:"drivertemp", value:curdriverTemp as Integer)
+           
+           
+            def passtemp3 = result.passtemp.toBigDecimal()
+        	def curpassTemp = cToF(passtemp3)
+            sendEvent(name:"passtemp", value:curpassTemp as Integer)
             
         switch (result.iscarcharging) {
             case "Disconnected":
@@ -432,7 +464,7 @@ switch (APICommand) {
 	case "refresh":
 		APIPath = "/api/refresh"
         log.debug "request Refresh"
-	break;
+    break;
 }
 
 switch (APICommand) {
@@ -477,6 +509,19 @@ def ipSetup() {
 		device.deviceNetworkId = "$hosthex:$porthex"
 	}
 }
+
+def units = ""   
+def cToF(temp){
+      if (settings.tempScale == "Celcius"){
+      return temp
+      units = "C"
+      }
+      else{
+        return temp * 1.8 + 32
+        units = "F"
+    }
+} 
+
 private String convertIPtoHex(ip) { 
 	String hexip = ip.tokenize( '.' ).collect { String.format( '%02x', it.toInteger() ) }.join()
 	return hexip
