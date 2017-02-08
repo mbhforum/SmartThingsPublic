@@ -8,12 +8,19 @@ metadata {
         capability "Lock"
         capability "battery"
         capability "Temperature Measurement"
+        capability "Tone"
+        capability "Button"
+        capability "Momentary"
+        capability "Thermostat Setpoint"
+        capability "Light"
 
         command "refresh"
         command "chargestart"
         command "chargestop"
         command "SetpointUp"
         command "SetpointDown"
+        command "opentrunk"
+        command "openfrunk"
 
         attribute "network", "string"
         attribute "batteryState", "string"
@@ -160,6 +167,7 @@ metadata {
 
         standardTile("chargestart", "device.chargestart", width:1, height:1, decoration: "flat") {
         	state "chargestart", action: "chargestart",	icon: "http://i67.tinypic.com/52zyo7.png"}
+            
 
         standardTile("chargestop", "device.chargestop", width:1, height:1, decoration: "flat") {
         	state "chargestop", action: "chargestop",icon: "http://i.imgur.com/LHYiTzK.png"}
@@ -174,19 +182,19 @@ metadata {
         }
         
         standardTile("openfrunk", "openfrunk.chargestop", width:1, height:1, decoration: "flat") {
-        	state "openfrunk", action: "openfrunk",icon: "http://http://i.imgur.com/G8Qwmsd.jpg"}
+        	state "openfrunk", action:"openfrunk",icon: "http://http://i.imgur.com/G8Qwmsd.jpg"}
             
         standardTile("carstart", "device.carstart", width:1, height:1, decoration: "flat") {
-        	state "carstart", action: "carstart",icon: "http://i.imgur.com/ZMum6n6.png"}
+        	state "pushed", action:"button.pushed",icon: "http://i.imgur.com/ZMum6n6.png"}
         
         standardTile("opentrunk", "device.opentrunk", width:1, height:1, decoration: "flat") {
         	state "opentrunk", action: "opentrunk",icon: "http://i.imgur.com/lXLtfmx.jpg"}
         
         standardTile("honkhorn", "device.honkhorn", width:1, height:1, decoration: "flat") {
-        	state "honkhorn", action: "honkhorn",icon: "http://i.imgur.com/XgV3yge.jpg"}
+        	state "beep", action: "tone.beep",icon: "http://i.imgur.com/XgV3yge.jpg"}
         
-        standardTile("flashlights", "device.flashlights", width:1, height:1, decoration: "flat") {
-        	state "flashlights", action: "flashlights",icon: "http://i.imgur.com/YsKVv12.jpg"}
+        standardTile("flashlights", "device.switch", width:1, height:1, decoration: "flat") {
+        	state "on", action: "switch.on",icon: "http://i.imgur.com/YsKVv12.jpg"}
         
         standardTile("refresh", "device.switch", inactiveLabel: false, height: 1, width: 1, decoration: "flat") {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
