@@ -162,7 +162,7 @@ metadata {
         	state "chargestart", action: "chargestart",	icon: "http://i67.tinypic.com/52zyo7.png"}
 
         standardTile("chargestop", "device.chargestop", width:1, height:1, decoration: "flat") {
-        	state "chargestop", action: "chargestop",icon: "http://i67.tinypic.com/14x2joj.png"}
+        	state "chargestop", action: "chargestop",icon: "http://i.imgur.com/LHYiTzK.png"}
 
         valueTile("timetocharge", "device.timetocharge", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
         	state "timetocharge", label:'Hours to reach full battery: ${currentValue}', unit:""
@@ -172,6 +172,21 @@ metadata {
             state("present", labelIcon:"st.presence.tile.mobile-present", backgroundColor:"#53a7c0")
             state("not present", labelIcon:"st.presence.tile.mobile-not-present", backgroundColor:"#ebeef2")
         }
+        
+        standardTile("openfrunk", "openfrunk.chargestop", width:1, height:1, decoration: "flat") {
+        	state "openfrunk", action: "openfrunk",icon: "http://http://i.imgur.com/G8Qwmsd.jpg"}
+            
+        standardTile("carstart", "device.carstart", width:1, height:1, decoration: "flat") {
+        	state "carstart", action: "carstart",icon: "http://i.imgur.com/ZMum6n6.png"}
+        
+        standardTile("opentrunk", "device.opentrunk", width:1, height:1, decoration: "flat") {
+        	state "opentrunk", action: "opentrunk",icon: "http://i.imgur.com/lXLtfmx.jpg"}
+        
+        standardTile("honkhorn", "device.honkhorn", width:1, height:1, decoration: "flat") {
+        	state "honkhorn", action: "honkhorn",icon: "http://i.imgur.com/XgV3yge.jpg"}
+        
+        standardTile("flashlights", "device.flashlights", width:1, height:1, decoration: "flat") {
+        	state "flashlights", action: "flashlights",icon: "http://i.imgur.com/YsKVv12.jpg"}
         
         standardTile("refresh", "device.switch", inactiveLabel: false, height: 1, width: 1, decoration: "flat") {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
