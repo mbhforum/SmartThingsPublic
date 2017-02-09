@@ -34,7 +34,6 @@ metadata {
     preferences {
         input("ip", "text", title: "IP Address", description: "Local server IP address", required: true, displayDuringSetup: true)
         input("port", "number", title: "Port Number", description: "Port Number (Default:5000)", defaultValue: "5000", required: true, displayDuringSetup: true)
-    	input("tempScale", "enum", title: "Temperature Unit:", options: ["Celcius", "Fahrenheit"], defaultValue: "Celcius", required: true, displayDuringSetup: true)
     }
     
     tiles (scale:2) {
@@ -211,7 +210,7 @@ def parse(String description) {
     
     map = stringToMap(description)
     headerString = new String(map.headers.decodeBase64())
-
+    
     if (headerString.contains("200 OK")) {
     	
         bodyString = new String(map.body.decodeBase64())
@@ -247,21 +246,20 @@ def parse(String description) {
                 log.debug 'Vehicle is home'
                 present()
             }
-
-            log.debug settings.tempScale
+			             
+            def tempScale = result.getttempunits
+            
             def temp = result.insidetemp.toBigDecimal()
             def curTemp = cToF(temp)
-           	sendEvent(name:"temperature", value:curTemp as Integer)
-                        
+           	sendEvent(name:"temperature", value:curTemp as Integer)     
+                 
             sendEvent(name:"battery", value:result.getbatterylevel)
             sendEvent(name:"batteryRange", value:result.getbatteryrange)
             sendEvent(name:"timetocharge", value:result.gettimetocharge)
             
-            
             def drivertemp2 = result.drivertemp.toBigDecimal()
         	def curdriverTemp = cToF(drivertemp2)
             sendEvent(name:"drivertemp", value:curdriverTemp as Integer)
-           
            
             def passtemp3 = result.passtemp.toBigDecimal()
         	def curpassTemp = cToF(passtemp3)
@@ -295,18 +293,18 @@ def parse(String description) {
 
 def installed() {
 	log.debug "Installed with settings: ${settings}"
-	initialize()
+    initialize()
 }
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"
-	initialize()
+    initialize()
 }
 
 def initialize() {
 	log.info "Tesla ${textVersion()} ${textCopyright()}"
 	ipSetup()
-	poll()
+    poll()
 }
 
 def on() {
@@ -397,22 +395,27 @@ def gettimetocharge() {
 	api('gettimetocharge')
 }
 
+def gettempscale() {
+	log.debug "Executing Temperature Scale Query"
+    api ('gettempscale')
+}
+
 def poll() {
 	log.debug "Executing 'poll'"
-	if (device.deviceNetworkId != null) {
+    if (device.deviceNetworkId != null) {
 		refresh()
 	}
 	else {
-		sendEvent(name: 'status', value: "error" as String)
+        sendEvent(name: 'status', value: "error" as String)
 		sendEvent(name: 'network', value: "Not Connected" as String)
-		log.debug "DNI: Not set"
+        log.debug "DNI: Not set"
 	}
 }
 
 def refresh() {
 	log.debug "Executing 'refresh'"
 	ipSetup()
-	api('refresh')
+    api('refresh')
 }
 
 def api(String APICommand, success = {}) {
@@ -484,14 +487,18 @@ switch (APICommand) {
 		APIPath = "/api/gettimetocharge"
 		log.debug "Getting Time to Charge"
 	break;
-	case "refresh":
+	case "gettempscale":
+    	APIPath = "/api/api/gettempunit"
+        log.debug "Getting Temperature Unit"
+    break;
+    case "refresh":
 		APIPath = "/api/refresh"
         log.debug "request Refresh"
     break;
 }
 
 switch (APICommand) {
-	case ["isclimateon", "ishome", "islocked", "insidetemp", "getbattery", "getbatteryrange", "getcharging", "gettimetocharge", "drivertemp", "passtemp", "refresh"]:
+	case ["isclimateon", "ishome", "islocked", "insidetemp", "getbattery", "getbatteryrange", "getcharging", "gettimetocharge", "drivertemp", "passtemp", "gettempscale", "refresh"]:
 		log.debug APICommand
 		try {
 			hubAction = new physicalgraph.device.HubAction(
@@ -535,13 +542,11 @@ def ipSetup() {
 
 def units = ""   
 def cToF(temp){
-      if (settings.tempScale == "Celcius"){
+      if (tempScale == "C"){
       return temp
-      units = "C"
       }
       else{
         return temp * 1.8 + 32
-        units = "F"
     }
 } 
 
