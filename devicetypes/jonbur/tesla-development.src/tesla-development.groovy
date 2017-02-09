@@ -8,25 +8,26 @@ metadata {
         capability "Lock"
         capability "battery"
         capability "Temperature Measurement"
+        capability "Thermostat Heating Setpoint"
+        capability "Thermostat Cooling Setpoint"
         capability "Tone"
-        capability "Button"
         capability "Momentary"
         capability "Thermostat Setpoint"
-        capability "Light"
-
+   
         command "refresh"
         command "chargestart"
         command "chargestop"
         command "SetpointUp"
         command "SetpointDown"
-        command "opentrunk"
-        command "openfrunk"
+        command "flashlights"
+
 
         attribute "network", "string"
         attribute "batteryState", "string"
         attribute "batteryRange", "string"
         attribute "chargestart", "string"
         attribute "chargestop", "string"
+        attribute "flashlights", "string"
         attribute "timetocharge", "string"
         attribute "temperature", "number"
     }
@@ -65,11 +66,10 @@ metadata {
 			state "default", label: '', icon:"http://i66.tinypic.com/95pjbd.png"
 			state "", label: ''
 		}
-        
-        standardTile("DriverTemperatureUp", "device.DriverTemperatureUp", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', action:"SetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
-			state "", label: ''
-		}
+                
+		standardTile("heatingSetpointUp", "device.heatingSetpoint", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', action:"heatingSetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
+			state "", label: ''}
                
         valueTile("drivertemp", "device.drivertemp", width: 1, height: 1, inactiveLabel: false) {
             state "drivertemp", label:'${currentValue}°', unit:units,
@@ -93,8 +93,8 @@ metadata {
             ]
         }
         
-		standardTile("DriverTemperatureDown", "device.DriverTemperatureDown", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', action:"SetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
+		standardTile("heatingSetpointDown", "device.heatingSetpoint",  width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label:'', action:"heatingSetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
 			state "", label: ''
 		}
         
@@ -103,8 +103,9 @@ metadata {
 			state "", label: ''
 		}
         
-        standardTile("PassengerTemperatureUp", "device.PassengerTemperatureUp", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', action:"SetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
+ 
+       	standardTile("coolingSetpointUp", "device.coolingSetpoint", width: 1, height: 1,canChangeIcon: false, decoration: "flat") {
+			state "default", label:'', action:"coolingSetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
 			state "", label: ''
 		}
         
@@ -129,8 +130,8 @@ metadata {
 				[value: 96, color: "#bc2323"]
             ]
         }
-        standardTile("Passdriverdown", "device.Passdriverdown", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', action:"SetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
+		standardTile("coolingSetpointDown", "device.coolingSetpoint", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label:'', action:"coolingSetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
 			state "", label: ''
 		}
        
@@ -179,21 +180,15 @@ metadata {
             state("present", labelIcon:"st.presence.tile.mobile-present", backgroundColor:"#53a7c0")
             state("not present", labelIcon:"st.presence.tile.mobile-not-present", backgroundColor:"#ebeef2")
         }
-        
-        standardTile("openfrunk", "openfrunk.chargestop", width:1, height:1, decoration: "flat") {
-        	state "openfrunk", action:"openfrunk",icon: "http://http://i.imgur.com/G8Qwmsd.jpg"}
             
         standardTile("carstart", "device.carstart", width:1, height:1, decoration: "flat") {
-        	state "pushed", action:"button.pushed",icon: "http://i.imgur.com/ZMum6n6.png"}
-        
-        standardTile("opentrunk", "device.opentrunk", width:1, height:1, decoration: "flat") {
-        	state "opentrunk", action: "opentrunk",icon: "http://i.imgur.com/lXLtfmx.jpg"}
+        	state "push", action:"momentary.push",icon: "http://i.imgur.com/ZMum6n6.png"}
         
         standardTile("honkhorn", "device.honkhorn", width:1, height:1, decoration: "flat") {
         	state "beep", action: "tone.beep",icon: "http://i.imgur.com/XgV3yge.jpg"}
         
-        standardTile("flashlights", "device.switch", width:1, height:1, decoration: "flat") {
-        	state "on", action: "switch.on",icon: "http://i.imgur.com/YsKVv12.jpg"}
+        standardTile("flashlights", "device.flashlights", width:1, height:1, decoration: "flat") {
+        	state "flashlights", action: "flashlights",icon: "http://i.imgur.com/YsKVv12.jpg"}
         
         standardTile("refresh", "device.switch", inactiveLabel: false, height: 1, width: 1, decoration: "flat") {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
@@ -341,6 +336,24 @@ def lock() {
 	api('lock')
 }
 
+def beep() {
+	log.debug "Honking Horn"
+	ipSetup()
+	api('beep')
+}
+
+def flashlights() {
+	log.debug "Flash Lights"
+	ipSetup()
+	api('flashlights')
+}
+
+def push() {
+	log.debug "Keyless Start Enabled"
+    ipSetup()
+    api('startcar')
+}
+
 def insidetemp() {
 	log.debug "Executing Inside Temperature Query"
     ipSetup()
@@ -447,7 +460,19 @@ switch (APICommand) {
 		APIPath = "/api/doorlock"
 		log.debug "Locking door"
 		break;
-	case "islocked":
+	case "beep":
+		APIPath = "/api/honkhorn"
+		log.debug "Honking Horn"
+	break;
+    case "flashlights":
+		APIPath = "/api/flashlights"
+		log.debug "Flash Lights"
+	break;
+    case "startcar":
+		APIPath = "/api/startcar"
+		log.debug "Keyless Start enabled"
+	break;
+    case "islocked":
 		APIPath = "/api/iscarlocked"
 		log.debug "Request if car is locked sent"
 		break;
