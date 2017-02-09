@@ -102,6 +102,24 @@ def door_unlock(c, car):
 			result = v.command('door_unlock')['response']['result']
 	return result
 
+def honk_horn(c, car):
+	for v in c.vehicles:
+		if v["vin"] == car:
+			result = v.command('honk_horn')['response']['result']
+	return result
+
+def flash_lights(c, car):
+	for v in c.vehicles:
+		if v["vin"] == car:
+			result = v.command('flash_lights')['response']['result']
+	return result
+
+def start_car(c, car):
+	for v in c.vehicles:
+		if v["vin"] == car:
+			result = v.command('remote_start_drive?password=' + TESLA_PASSWORD)['response']['result']
+	return result
+
 def get_chargestatus(c, car):
 	chargestatus = None
 	for v in c.vehicles:
@@ -233,6 +251,29 @@ def doorunlock():
 	data = {}
 	data['result'] = str(door_unlock(c, VEHICLE_VIN))
 	return json.dumps(data)
+
+@app.route('/api/honkhorn')
+def honkhorn():
+	c = establish_connection()
+	data = {}
+	data['result'] = str(honk_horn(c, VEHICLE_VIN))
+	return json.dumps(data)
+
+@app.route('/api/flashlights')
+def flashlights():
+	c = establish_connection()
+	data = {}
+	data['result'] = str(flash_lights(c, VEHICLE_VIN))
+	return json.dumps(data)
+
+@app.route('/api/startcar')
+def startcar():
+	c = establish_connection()
+	data = {}
+	data['result'] = str(start_car(c, VEHICLE_VIN))
+	return json.dumps(data)
+
+
 
 @app.route('/api/getchargingstatus')
 def getchargestatus():
