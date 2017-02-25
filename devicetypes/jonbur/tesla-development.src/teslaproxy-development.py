@@ -27,6 +27,7 @@ def get_climate(c, car):
 
 def get_lockstatus(c, car):
 	lockstatus = None
+	firmwareversion = None
 	for v in c.vehicles:
 		if v["vin"] == car:
 			lockstatus = v.data_request("vehicle_state")
@@ -59,6 +60,9 @@ def get_passtemp(c, car):
 
 def get_iscarlocked(c,car):
 	return get_lockstatus(c, car)['locked']
+	
+def get_firmwareversion(c,car):
+	return get_lockstatus(c, car)['car_version']
 
 def get_location(c, car):
 	location = None
@@ -238,6 +242,13 @@ def iscarlocked():
 	data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
 	return json.dumps(data)
 
+@app.route('/api/getfirmwareversion')
+def getfirmwareversion():
+	c = establish_connection()
+	data = {}
+	data['firmwareversion'] = str(get_firmwareversion(c, VEHICLE_VIN))
+	return json.dumps(data)
+
 @app.route('/api/doorlock')
 def doorlock():
 	c = establish_connection()
@@ -272,8 +283,6 @@ def startcar():
 	data = {}
 	data['result'] = str(start_car(c, VEHICLE_VIN))
 	return json.dumps(data)
-
-
 
 @app.route('/api/getchargingstatus')
 def getchargestatus():
@@ -340,6 +349,7 @@ def refresh():
 	
 	data = {}
 	data['iscarlocked'] = str(get_iscarlocked(c, VEHICLE_VIN))
+	data['firmwareversion'] = str(get_firmwareversion(c, VEHICLE_VIN))
 	data['isvehiclehome'] = str(get_isvehiclehome(c, VEHICLE_VIN))
 	data['isclimateon'] = str(climatestatus['is_climate_on'])
 	data['insidetemp'] = str(climatestatus['inside_temp'])
