@@ -9,7 +9,6 @@ metadata {
         capability "battery"
         capability "Temperature Measurement"
         capability "Thermostat Heating Setpoint"
-        capability "Thermostat Cooling Setpoint"
         capability "Tone"
         capability "Momentary"
         capability "Thermostat Setpoint"
@@ -25,6 +24,7 @@ metadata {
         attribute "network", "string"
         attribute "batteryState", "string"
         attribute "batteryRange", "string"
+        attribute "FirmwareVersion", "string"
         attribute "chargestart", "string"
         attribute "chargestop", "string"
         attribute "flashlights", "string"
@@ -54,23 +54,30 @@ metadata {
         	}
         }
         
-		standardTile("switch", "device.switch", width: 2, height: 2, canChangeIcon: true) {
-            state "on", label:'${name}', action:"switch.off", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#79b821", nextState:"turningOff"
-            state "off", label:'${name}', action:"switch.on", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ffffff", nextState:"turningOn"
-            state "turningOn", label:'${name}', action:"switch.off", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#79b821", nextState:"turningOff"
-            state "turningOff", label:'${name}', action:"switch.on", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ffffff", nextState:"turningOn"
-            state "offline", label:'${name}', icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ff0000"
-        }
-		
-        standardTile("DriverSide", "device.DriverSide", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', icon:"http://i66.tinypic.com/95pjbd.png"
-			state "", label: ''
+		valueTile("battery", "device.battery", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
+        	state "battery", label:'Battery: ${currentValue}%', unit:""
 		}
-                
+        
+        valueTile("batteryRange", "device.batteryRange", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
+        	state "batteryRange", label:'Estimated Mileage Range: ${currentValue}', unit:""
+        }    
+
+         valueTile("timetocharge", "device.timetocharge", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
+        	state "timetocharge", label:'Hours to reach full battery: ${currentValue}', unit:""
+        }
+        
+        standardTile("chargestart", "device.chargestart", width:1, height:1, decoration: "flat") {
+        	state "chargestart", action: "chargestart",	icon: "http://i67.tinypic.com/52zyo7.png"}
+            
+
+        standardTile("chargestop", "device.chargestop", width:1, height:1, decoration: "flat") {
+        	state "chargestop", action: "chargestop",icon: "http://i.imgur.com/LHYiTzK.png"}
+        
+                        
 		standardTile("heatingSetpointUp", "device.heatingSetpoint", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
 			state "default", label: '', action:"heatingSetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
 			state "", label: ''}
-               
+            
         valueTile("drivertemp", "device.drivertemp", width: 1, height: 1, inactiveLabel: false) {
             state "drivertemp", label:'${currentValue}°', unit:units,
             backgroundColors:
@@ -92,50 +99,30 @@ metadata {
 				[value: 96, color: "#bc2323"]
             ]
         }
-        
+           
 		standardTile("heatingSetpointDown", "device.heatingSetpoint",  width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
 			state "default", label:'', action:"heatingSetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
 			state "", label: ''
 		}
         
-        standardTile("PassengerSide", "device.PassengerSide", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', icon:"http://i67.tinypic.com/2lm04lj.png"
-			state "", label: ''
-		}
+        standardTile("refresh", "device.switch", inactiveLabel: false, height: 1, width: 1, decoration: "flat") {
+            state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
+        }    
+                standardTile("carstart", "device.carstart", width:1, height:1, decoration: "flat") {
+        	state "push", action:"momentary.push",icon: "http://i.imgur.com/ZMum6n6.png"}
         
- 
-       	standardTile("coolingSetpointUp", "device.coolingSetpoint", width: 1, height: 1,canChangeIcon: false, decoration: "flat") {
-			state "default", label:'', action:"coolingSetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
-			state "", label: ''
-		}
+        standardTile("honkhorn", "device.honkhorn", width:1, height:1, decoration: "flat") {
+        	state "beep", action: "tone.beep",icon: "http://i.imgur.com/XgV3yge.jpg"}
         
-        valueTile("passtemp", "device.passtemp", width: 1, height: 1, inactiveLabel: false) {
-            state "passtemp", label:'${currentValue}°', unit:units,
-            backgroundColors:
-            [
-                // Celcius Color Range
-   				[value: 7, color: "#1e9cbb"],
-				[value: 15, color: "#90d2a7"],
-				[value: 23, color: "#44b621"],
-				[value: 29, color: "#f1d801"],
-				[value: 33, color: "#d04e00"],
-				[value: 36, color: "#bc2323"],
-				// Fahrenheit Color Range
-				[value: 40, color: "#153591"],
-				[value: 44, color: "#1e9cbb"],
-				[value: 59, color: "#90d2a7"],
-				[value: 74, color: "#44b621"],
-				[value: 84, color: "#f1d801"],
-				[value: 92, color: "#d04e00"],
-				[value: 96, color: "#bc2323"]
-            ]
+        standardTile("switch", "device.switch", width: 2, height: 2, canChangeIcon: true) {
+            state "on", label:'${name}', action:"switch.off", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#79b821", nextState:"turningOff"
+            state "off", label:'${name}', action:"switch.on", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ffffff", nextState:"turningOn"
+            state "turningOn", label:'${name}', action:"switch.off", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#79b821", nextState:"turningOff"
+            state "turningOff", label:'${name}', action:"switch.on", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ffffff", nextState:"turningOn"
+            state "offline", label:'${name}', icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ff0000"
         }
-		standardTile("coolingSetpointDown", "device.coolingSetpoint", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label:'', action:"coolingSetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
-			state "", label: ''
-		}
-       
-        valueTile("temperature", "device.temperature", width: 2, height: 2, inactiveLabel: false) {
+        
+                valueTile("temperature", "device.temperature", width: 2, height: 2, inactiveLabel: false) {
             state "temperature", label:'${currentValue}°', unit:units,
             backgroundColors:
             [
@@ -157,42 +144,17 @@ metadata {
             ]
         }
        
-       valueTile("battery", "device.battery", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
-        	state "battery", label:'Battery: ${currentValue}%', unit:""
-		}
-
-        valueTile("batteryRange", "device.batteryRange", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
-        	state "batteryRange", label:'Estimated Mileage Range: ${currentValue}', unit:""
-        }    
-
-        standardTile("chargestart", "device.chargestart", width:1, height:1, decoration: "flat") {
-        	state "chargestart", action: "chargestart",	icon: "http://i67.tinypic.com/52zyo7.png"}
-            
-
-        standardTile("chargestop", "device.chargestop", width:1, height:1, decoration: "flat") {
-        	state "chargestop", action: "chargestop",icon: "http://i.imgur.com/LHYiTzK.png"}
-
-        valueTile("timetocharge", "device.timetocharge", width: 2, height: 1, inactiveLabel: false, decoration: "flat") {
-        	state "timetocharge", label:'Hours to reach full battery: ${currentValue}', unit:""
-        }
+                 standardTile("flashlights", "device.flashlights", width:1, height:1, decoration: "flat") {
+        	state "flashlights", action: "flashlights",icon: "http://i.imgur.com/YsKVv12.jpg"}
 
         standardTile("presence", "device.presence", width: 3, height: 2, canChangeBackground: true) {
             state("present", labelIcon:"st.presence.tile.mobile-present", backgroundColor:"#53a7c0")
             state("not present", labelIcon:"st.presence.tile.mobile-not-present", backgroundColor:"#ebeef2")
         }
             
-        standardTile("carstart", "device.carstart", width:1, height:1, decoration: "flat") {
-        	state "push", action:"momentary.push",icon: "http://i.imgur.com/ZMum6n6.png"}
-        
-        standardTile("honkhorn", "device.honkhorn", width:1, height:1, decoration: "flat") {
-        	state "beep", action: "tone.beep",icon: "http://i.imgur.com/XgV3yge.jpg"}
-        
-        standardTile("flashlights", "device.flashlights", width:1, height:1, decoration: "flat") {
-        	state "flashlights", action: "flashlights",icon: "http://i.imgur.com/YsKVv12.jpg"}
-        
-        standardTile("refresh", "device.switch", inactiveLabel: false, height: 1, width: 1, decoration: "flat") {
-            state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
-        }
+        valueTile("FirmwareVersion", "device.FirmwareVersion", width: 3, height: 1, inactiveLabel: false, decoration: "flat") {
+        	state "FirmwareVersion", label:'Firmware Version: ${currentValue}', unit:""
+        }   
    }
    }
 
@@ -250,6 +212,7 @@ def parse(String description) {
             sendEvent(name:"battery", value:result.getbatterylevel)
             sendEvent(name:"batteryRange", value:result.getbatteryrange)
             sendEvent(name:"timetocharge", value:result.gettimetocharge)
+            sendEvent(name:"FirmwareVersion", value:result.firmwareversion)
             
             def drivertemp2 = result.drivertemp.toBigDecimal()
         	def curdriverTemp = cToF(drivertemp2)
@@ -383,6 +346,12 @@ def getbatteryrange() {
 	api('getbatteryrange')
 }
 
+def firmwareversion() {
+	log.debug "Executing Firmware Version Query"
+	ipSetup()
+	api('firmwareversion')
+}
+
 def getcharging() {
 	log.debug "Executing Charging Query"
 	ipSetup()
@@ -499,7 +468,11 @@ switch (APICommand) {
 		APIPath = "/api/getbatteryrange"
 		log.debug "Request battery range"
 		break;
-	case "chargestart":
+	case "getfirmwareversion":
+		APIPath = "/api/getfirmwareversion"
+		log.debug "Request Firmware Version"
+	break;    
+    case "chargestart":
 		APIPath = "/api/chargestart"
 		log.debug "Sending Charge Start Command to Vehicle"
 		break;
@@ -522,7 +495,7 @@ switch (APICommand) {
 }
 
 switch (APICommand) {
-	case ["isclimateon", "ishome", "islocked", "insidetemp", "getbattery", "getbatteryrange", "getcharging", "gettimetocharge", "drivertemp", "passtemp", "gettempscale", "refresh"]:
+	case ["isclimateon", "ishome", "islocked", "insidetemp", "getbattery", "getbatteryrange", "getcharging", "gettimetocharge", "drivertemp", "passtemp", "gettempscale", "firmwareversion", "refresh"]:
 		log.debug APICommand
 		try {
 			hubAction = new physicalgraph.device.HubAction(
