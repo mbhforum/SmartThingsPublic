@@ -229,7 +229,7 @@ def parse(String description) {
                 break;
             case "True":
                 log.debug 'Vehicle is locked'
-                sendEvent(name: 'lock', value: "lock" as String)
+                sendEvent(name: 'lock', value: "locked" as String)
             }
 
         switch (result.isvehiclehome) {
@@ -243,10 +243,9 @@ def parse(String description) {
             }
 			             
             def tempScale = result.getttempunits
-            
             def temp = result.insidetemp.toBigDecimal()
             def curTemp = cToF(temp)
-           	sendEvent(name:"temperature", value:curTemp as Integer)     
+            sendEvent(name:"temperature", value:curTemp as Integer)     
                  
             sendEvent(name:"battery", value:result.getbatterylevel)
             sendEvent(name:"batteryRange", value:result.getbatteryrange)
