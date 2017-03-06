@@ -8,16 +8,18 @@ metadata {
         capability "Lock"
         capability "battery"
         capability "Temperature Measurement"
-        capability "Thermostat Heating Setpoint"
+        capability "Thermostat"
         capability "Tone"
         capability "Momentary"
         capability "Thermostat Setpoint"
+        capability "Sensor"
+		capability "Actuator"
    
         command "refresh"
         command "chargestart"
         command "chargestop"
-        command "SetpointUp"
-        command "SetpointDown"
+		command "tempUp"
+		command "tempDown"
         command "flashlights"
 
 
@@ -74,8 +76,8 @@ metadata {
         	state "chargestop", action: "chargestop",icon: "http://i.imgur.com/LHYiTzK.png"}
         
                         
-		standardTile("heatingSetpointUp", "device.heatingSetpoint", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label: '', action:"heatingSetpointUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
+		standardTile("tempUp", "device.temperaturesetpoint", width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label: '', action:"tempUp", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/heat_arrow_up.png"
 			state "", label: ''}
             
         valueTile("drivertemp", "device.drivertemp", width: 1, height: 1, inactiveLabel: false) {
@@ -100,8 +102,8 @@ metadata {
             ]
         }
            
-		standardTile("heatingSetpointDown", "device.heatingSetpoint",  width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
-			state "default", label:'', action:"heatingSetpointDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
+		standardTile("tempDown", "device.temperaturesetpoint",  width: 1, height: 1, canChangeIcon: false, decoration: "flat") {
+			state "default", label:'', action:"tempDown", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/cool_arrow_down.png"
 			state "", label: ''
 		}
         
@@ -122,7 +124,7 @@ metadata {
             state "offline", label:'${name}', icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/App/heat_cool_icon.png", backgroundColor:"#ff0000"
         }
         
-                valueTile("temperature", "device.temperature", width: 2, height: 2, inactiveLabel: false) {
+            valueTile("temperature", "device.temperature", width: 2, height: 2, inactiveLabel: false) {
             state "temperature", label:'${currentValue}°', unit:units,
             backgroundColors:
             [
@@ -546,6 +548,7 @@ def cToF(temp){
         return temp * 1.8 + 32
     }
 } 
+
 
 private String convertIPtoHex(ip) { 
 	String hexip = ip.tokenize( '.' ).collect { String.format( '%02x', it.toInteger() ) }.join()
